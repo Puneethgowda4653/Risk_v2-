@@ -476,16 +476,16 @@ function App() {
       try {
         const p = JSON.parse(saved);
         if (p.step === 'results' && p.result) { setMetadata(p.metadata); setResult(p.result); setStep('results'); }
-        else if (p.step === 'assessment') { 
-          setMetadata(p.metadata); 
-          setSessionQuestions(p.sessionQuestions); 
-          setCurrentQIndex(p.currentQIndex); 
-          setResponses(p.responses || []); 
-          setSliderValue(p.sliderValue || 3); 
+        else if (p.step === 'assessment') {
+          setMetadata(p.metadata);
+          setSessionQuestions(p.sessionQuestions);
+          setCurrentQIndex(p.currentQIndex);
+          setResponses(p.responses || []);
+          setSliderValue(p.sliderValue || 3);
           const currentQ = p.sessionQuestions[p.currentQIndex];
           const hasAnswer = currentQ && p.responses?.some((r: Response) => r.questionId === currentQ.id);
           setCurrentAnswered(!!hasAnswer);
-          setStep('assessment'); 
+          setStep('assessment');
         }
       } catch { localStorage.removeItem('risk_assessment_session'); }
     }
