@@ -5,7 +5,7 @@ import { generateUniqueAssessment, calculateRiskScore, getBenchmarkData } from '
 import { generatePDF } from './utils/pdfGenerator';
 import './index.css';
 
-const API_URL = 'http://localhost:3001';
+const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:3001' : window.location.origin);
 
 type Step = 'onboarding' | 'assessment' | 'results' | 'retest';
 type BusinessStage = 'pre-seed' | 'seed' | 'series-a' | 'series-b' | 'series-c+';
