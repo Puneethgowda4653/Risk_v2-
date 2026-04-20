@@ -1013,7 +1013,7 @@ function App() {
           flexShrink: 0,
         }}>
           <img
-            src="infopace-logo-300x128.webp"
+            src="/infopace-logo-300x128.webp"
             alt="Infopace Logo"
             className="ip-logo-img"
             style={{
