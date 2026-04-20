@@ -458,6 +458,7 @@ function App() {
   const [result, setResult] = useState<any>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [sliderValue, setSliderValue] = useState(3);
+  const [currentAnswered, setCurrentAnswered] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [modal, setModal] = useState<{ title: string; subtitle?: string } | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -475,7 +476,17 @@ function App() {
       try {
         const p = JSON.parse(saved);
         if (p.step === 'results' && p.result) { setMetadata(p.metadata); setResult(p.result); setStep('results'); }
-        else if (p.step === 'assessment') { setMetadata(p.metadata); setSessionQuestions(p.sessionQuestions); setCurrentQIndex(p.currentQIndex); setResponses(p.responses || []); setSliderValue(p.sliderValue || 3); setStep('assessment'); }
+        else if (p.step === 'assessment') { 
+          setMetadata(p.metadata); 
+          setSessionQuestions(p.sessionQuestions); 
+          setCurrentQIndex(p.currentQIndex); 
+          setResponses(p.responses || []); 
+          setSliderValue(p.sliderValue || 3); 
+          const currentQ = p.sessionQuestions[p.currentQIndex];
+          const hasAnswer = currentQ && p.responses?.some((r: Response) => r.questionId === currentQ.id);
+          setCurrentAnswered(!!hasAnswer);
+          setStep('assessment'); 
+        }
       } catch { localStorage.removeItem('risk_assessment_session'); }
     }
     setIsLoading(false);
@@ -629,16 +640,18 @@ function App() {
   };
 
   const handleNext = () => {
+    if (!currentAnswered) return;
     const cq = sessionQuestions[currentQIndex];
     const updated = [...responses, { questionId: cq.id, domainId: cq.domainId, value: sliderValue }];
     setResponses(updated);
     sendResponseToServer(cq.domainId, currentQIndex, sliderValue);
-    if (currentQIndex < sessionQuestions.length - 1) { setCurrentQIndex(p => p + 1); setSliderValue(3); }
+    if (currentQIndex < sessionQuestions.length - 1) { setCurrentQIndex(p => p + 1); setSliderValue(3); setCurrentAnswered(false); }
     else if (detectStraightLining(updated)) { setStep('retest'); }
     else { const r = calculateRiskScore(updated, metadata); setResult(r); setStep('results'); setTimeout(() => saveToSupabase(), 500); }
   };
 
   const handleSelectOption = (value: number) => {
+    setCurrentAnswered(true);
     const cq = sessionQuestions[currentQIndex];
     const updated = [...responses, { questionId: cq.id, domainId: cq.domainId, value: value }];
     setResponses(updated);
@@ -646,6 +659,7 @@ function App() {
     if (currentQIndex < sessionQuestions.length - 1) {
       setCurrentQIndex(p => p + 1);
       setSliderValue(3);
+      setCurrentAnswered(false);
     } else if (detectStraightLining(updated)) {
       setStep('retest');
     } else {
@@ -670,6 +684,7 @@ function App() {
       const pq = sessionQuestions[currentQIndex - 1];
       const pr = responses.find(r => r.questionId === pq.id);
       setSliderValue(pr ? pr.value : 3);
+      setCurrentAnswered(!!pr);
     }
   };
 
@@ -1703,7 +1718,7 @@ function App() {
                 max="5"
                 step="0.1"
                 value={sliderValue}
-                onChange={e => setSliderValue(parseFloat(e.target.value))}
+                onChange={e => { setSliderValue(parseFloat(e.target.value)); setCurrentAnswered(true); }}
                 onMouseUp={e => handleSelectOption(Math.round(parseFloat((e.target as HTMLInputElement).value)))}
                 onTouchEnd={e => handleSelectOption(Math.round(parseFloat((e.target as HTMLInputElement).value)))}
                 style={{ width: '100%' }}
@@ -1774,28 +1789,32 @@ function App() {
 
               <button
                 onClick={handleNext}
+                disabled={!currentAnswered}
                 style={{
                   padding: '10px 20px',
                   borderRadius: 8,
                   fontSize: 12,
                   fontWeight: 700,
                   fontFamily: 'inherit',
-                  cursor: 'pointer',
-                  background: '#0ea9c8',
+                  cursor: currentAnswered ? 'pointer' : 'not-allowed',
+                  background: currentAnswered ? '#0ea9c8' : '#9ca3af',
                   color: '#ffffff',
                   border: 'none',
-                  boxShadow: '0 3px 10px rgba(14, 169, 200, 0.3)',
+                  boxShadow: currentAnswered ? '0 3px 10px rgba(14, 169, 200, 0.3)' : 'none',
                   transition: 'all 0.3s ease',
                   textTransform: 'uppercase',
-                  letterSpacing: 0.2
+                  letterSpacing: 0.2,
+                  opacity: currentAnswered ? 1 : 0.6
                 }}
                 onMouseEnter={e => {
-                  e.currentTarget.style.background = '#0a94af';
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(14, 169, 200, 0.4)';
+                  if (currentAnswered) {
+                    e.currentTarget.style.background = '#0a94af';
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(14, 169, 200, 0.4)';
+                  }
                 }}
                 onMouseLeave={e => {
-                  e.currentTarget.style.background = '#0ea9c8';
-                  e.currentTarget.style.boxShadow = '0 3px 10px rgba(14, 169, 200, 0.3)';
+                  e.currentTarget.style.background = currentAnswered ? '#0ea9c8' : '#9ca3af';
+                  e.currentTarget.style.boxShadow = currentAnswered ? '0 3px 10px rgba(14, 169, 200, 0.3)' : 'none';
                 }}
               >
                 {currentQIndex === sessionQuestions.length - 1 ? 'Analyze Results' : 'Next'}
@@ -2170,7 +2189,7 @@ function App() {
                 <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {priorityRisks.length > 0 ? (() => {
                     const w = 240, h = 100;
-                    const margin = { left: 20, right: 20, top: 6, bottom: 16 };
+                    const margin = { left: 45, right: 20, top: 6, bottom: 16 };
                     const plotW = w - margin.left - margin.right;
                     const plotH = h - margin.top - margin.bottom;
 
@@ -2254,8 +2273,8 @@ function App() {
 
                         {/* Domain labels */}
                         {data.map((d, i) => (
-                          <text key={`label-${i}`} x={margin.left - 2} y={d.baseline + 3} textAnchor="end" fontSize="7" fill="#6b7280" fontWeight="600">
-                            {d.domain.substring(0, 6)}
+                          <text key={`label-${i}`} x={margin.left - 4} y={d.baseline + 3} textAnchor="end" fontSize="7" fill="#6b7280" fontWeight="600">
+                            {d.domain.replace(' Risk', '').substring(0, 15)}
                           </text>
                         ))}
                       </svg>
