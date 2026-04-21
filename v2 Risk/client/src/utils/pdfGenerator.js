@@ -17,6 +17,25 @@ const wrapText = (doc, text, x, y, maxWidth, lineHeight = 5) => {
   return y + (lines.length * lineHeight);
 };
 
+// Helper to load logo image and convert to base64 PNG for PDF embedding
+const loadLogoAsBase64 = () => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const dataUrl = canvas.toDataURL('image/png');
+      resolve({ dataUrl, width: img.naturalWidth, height: img.naturalHeight });
+    };
+    img.onerror = () => resolve(null);
+    img.src = '/favicon.webp';
+  });
+};
+
 export const generatePDF = async (assessmentData, metadata) => {
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -45,19 +64,36 @@ export const generatePDF = async (assessmentData, metadata) => {
   let yPosition = margin;
   let pageNum = 1;
 
+  // Load company logo for PDF embedding
+  const logoData = await loadLogoAsBase64();
+
+  // Helper to add logo to any page
+  const addLogo = (isCover = false) => {
+    if (!logoData) return;
+    const aspectRatio = logoData.width / logoData.height;
+    const logoW = isCover ? 30 : 20;
+    const logoH = logoW / aspectRatio;
+    const logoX = pageWidth - margin - logoW;
+    const logoY = isCover ? 6 : 5;
+    doc.addImage(logoData.dataUrl, 'PNG', logoX, logoY, logoW, logoH);
+  };
+
   // ============ PAGE 1: COVER PAGE ============
   
   doc.setFillColor(...colors.primary);
   doc.rect(0, 0, pageWidth, 60, 'F');
   
+  // Add company logo to cover page header
+  addLogo(true);
+  
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(28);
   doc.setFont('helvetica', 'bold');
-  doc.text('Risk Assessment Report', margin, 25);
+  doc.text('Risk Assessment Report', margin, 30);
   
   doc.setFontSize(11);
   doc.setFont('helvetica', 'normal');
-  doc.text('Comprehensive Business Risk Analysis', margin, 35);
+  doc.text('Comprehensive Business Risk Analysis', margin, 40);
   
   yPosition = 75;
   doc.setDrawColor(...colors.border);
@@ -129,7 +165,8 @@ export const generatePDF = async (assessmentData, metadata) => {
 
   // ============ PAGE 2: EXECUTIVE SUMMARY ============
   doc.addPage();
-  yPosition = margin;
+  addLogo();
+  yPosition = margin + 8;
   pageNum = 2;
   
   doc.setFontSize(16);
@@ -184,7 +221,8 @@ This evaluation uses weighted domain scoring (each domain weighted by strategic 
 
   // ============ PAGE 3: DOMAIN BREAKDOWN ============
   doc.addPage();
-  yPosition = margin;
+  addLogo();
+  yPosition = margin + 8;
   pageNum = 3;
   
   doc.setFontSize(16);
@@ -207,7 +245,8 @@ This evaluation uses weighted domain scoring (each domain weighted by strategic 
   sortedDomains.forEach(([domainId, domainData], index) => {
     if (yPosition > pageHeight - 30) {
       doc.addPage();
-      yPosition = margin;
+      addLogo();
+      yPosition = margin + 8;
     }
     
     // Domain header with score
@@ -275,7 +314,8 @@ This evaluation uses weighted domain scoring (each domain weighted by strategic 
 
   // ============ PAGE 4: RISK FLAGS ============
   doc.addPage();
-  yPosition = margin;
+  addLogo();
+  yPosition = margin + 8;
   pageNum = 4;
   
   doc.setFontSize(16);
@@ -300,7 +340,8 @@ This evaluation uses weighted domain scoring (each domain weighted by strategic 
     assessmentData.flags.forEach((flag, idx) => {
       if (yPosition > pageHeight - 25) {
         doc.addPage();
-        yPosition = margin;
+        addLogo();
+        yPosition = margin + 8;
       }
       
       // Flag type badge
@@ -362,7 +403,8 @@ This evaluation uses weighted domain scoring (each domain weighted by strategic 
 
   // ============ PAGE 5: RECOMMENDATIONS ============
   doc.addPage();
-  yPosition = margin;
+  addLogo();
+  yPosition = margin + 8;
   pageNum = 5;
   
   doc.setFontSize(16);
@@ -394,7 +436,8 @@ This evaluation uses weighted domain scoring (each domain weighted by strategic 
     criticalDomains.forEach(([id, domain], idx) => {
       if (yPosition > pageHeight - 30) {
         doc.addPage();
-        yPosition = margin;
+        addLogo();
+        yPosition = margin + 8;
       }
       doc.setFont('helvetica', 'bold');
       doc.text(`${idx + 1}. Address ${domain.name} (Score: ${Math.round(domain.score)}%)`, margin + 5, yPosition);
@@ -459,7 +502,8 @@ This evaluation uses weighted domain scoring (each domain weighted by strategic 
 
   // ============ PAGE 6: METHODOLOGY ============
   doc.addPage();
-  yPosition = margin;
+  addLogo();
+  yPosition = margin + 8;
   pageNum = 6;
   
   doc.setFontSize(16);
