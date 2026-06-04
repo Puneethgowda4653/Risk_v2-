@@ -1238,7 +1238,9 @@ function App() {
       }}>
         <style>{`
           @keyframes slideIn { from { opacity:0; transform:translateX(-10px); } to { opacity:1; transform:none; } }
+          .assess-logo-desktop { display: block; }
           @media (max-width: 600px) {
+            .assess-logo-desktop { display: none; }
             .assess-body { padding: 14px 12px !important; align-items: flex-start !important; }
             .assess-inner { height: auto !important; }
             .assess-question { font-size: 18px !important; }
@@ -1513,7 +1515,7 @@ function App() {
           zIndex: 20,
           flexShrink: 0,
         }}>
-          {/* Top row: question info + progress */}
+          {/* Top row: question info + logo (desktop only) + progress */}
           <div style={{
             padding: '12px 20px',
             display: 'flex',
@@ -1530,6 +1532,15 @@ function App() {
                 Question {currentQIndex + 1} <span style={{ fontSize: 13, color: '#9ca3af' }}>/ {sessionQuestions.length}</span>
               </div>
             </div>
+
+            {/* Center: Logo – only shown on desktop via CSS class */}
+            <img
+              className="assess-logo-desktop"
+              src="infopace-logo-300x128.webp"
+              alt="Company Logo"
+              style={{ height: 52, objectFit: 'contain' }}
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
 
             {/* Right: progress % */}
             <div style={{ textAlign: 'right', flexShrink: 0 }}>
