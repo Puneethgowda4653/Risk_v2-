@@ -1226,15 +1226,22 @@ function App() {
 
     return (
       <div style={{
-        height: '100vh',
+        minHeight: '100vh',
         width: '100vw',
         background: '#f3f4f6',
         display: 'flex',
         flexDirection: 'column',
         fontFamily: "'DM Sans', system-ui, sans-serif",
         position: 'relative',
-        overflow: 'hidden'
+        overflow: 'auto'
       }}>
+        <style>{`
+          @media (max-width: 768px) {
+            .assess-header { padding: 12px 16px !important; gap: 8px !important; }
+            .assess-header .assess-logo { display: none !important; }
+            .assess-body { padding: 16px 12px !important; align-items: flex-start !important; }
+          }
+        `}</style>
         {/* Watermarks - Graphical */}
         {/* Large Risk Shield - Center Background */}
         <svg style={{
@@ -1491,7 +1498,7 @@ function App() {
         </svg>
 
         {/* Header */}
-        <div style={{
+        <div className="assess-header" style={{
           padding: '16px 48px',
           display: 'flex',
           alignItems: 'center',
@@ -1524,7 +1531,7 @@ function App() {
           </div>
 
           {/* Center - Logo */}
-          <div style={{
+          <div className="assess-logo" style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -1553,13 +1560,13 @@ function App() {
         </div>
 
         {/* Main Content */}
-        <div style={{
+        <div className="assess-body" style={{
           flex: 1,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           padding: '24px 48px',
-          overflow: 'hidden'
+          overflow: 'auto'
         }}>
           <div style={{
             width: '100%',
@@ -1873,7 +1880,7 @@ function App() {
     const confidenceLabel = validityScore > 90 ? 'High Confidence' : validityScore > 70 ? 'Medium Confidence' : 'Low Confidence';
 
     return (
-      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans', system-ui, sans-serif", background: '#f4f5f7', overflow: 'hidden' }}>
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans', system-ui, sans-serif", background: '#f4f5f7', overflow: 'auto' }}>
         <style>{SHARED_STYLES + `
           ::-webkit-scrollbar { width: 0; height: 0; }
           @keyframes fadeUp { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
@@ -1881,10 +1888,25 @@ function App() {
           .dcard { background:white; border-radius:10px; padding:8px 10px; box-shadow:0 1px 6px rgba(0,0,0,.04); border:1px solid #f0f0f0; }
           .db-btn { padding:4px 10px; border-radius:16px; font-size:9px; font-weight:600; font-family:inherit; cursor:pointer; border:none; transition:all .2s; display:inline-flex; align-items:center; gap:4px; }
           .db-btn:hover { transform:translateY(-1px); box-shadow:0 2px 6px rgba(0,0,0,.12); }
+          .res-topbar { flex-wrap: wrap; height: auto !important; min-height: 40px; }
+          .res-topbar-btns { flex-wrap: wrap; gap: 4px; }
+          .res-body { overflow: auto !important; }
+          .res-kpi-grid { grid-template-columns: repeat(5, 1fr); }
+          .res-main-grid { grid-template-columns: 1.1fr 1fr 1fr; }
+          @media (max-width: 768px) {
+            .res-kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
+            .res-main-grid { grid-template-columns: 1fr !important; min-height: unset !important; flex: unset !important; }
+            .res-main-grid > * { min-height: unset !important; height: auto !important; }
+            .res-body { padding: 6px !important; overflow: auto !important; }
+            .db-btn-hide { display: none !important; }
+          }
+          @media (max-width: 480px) {
+            .res-kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
+          }
         `}</style>
 
         {/* ── TOP BAR – dark purple/navy ── */}
-        <div style={{ height: 40, flexShrink: 0, background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #3b0764 100%)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px' }}>
+        <div className="res-topbar" style={{ height: 40, flexShrink: 0, background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #3b0764 100%)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 14 }}>🛡️</span>
             <div>
@@ -1892,8 +1914,8 @@ function App() {
               <div style={{ fontSize: 8, color: 'rgba(255,255,255,.5)', fontWeight: 500, letterSpacing: 0.4, textTransform: 'uppercase' }}>{metadata.companyName} · Click any element for insights</div>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span className="db-btn" style={{ background: 'rgba(34,197,94,.9)', color: 'white', fontSize: 8 }}>High Validity</span>
+          <div className="res-topbar-btns" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span className="db-btn db-btn-hide" style={{ background: 'rgba(34,197,94,.9)', color: 'white', fontSize: 8 }}>High Validity</span>
             <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'linear-gradient(135deg,#8b5cf6,#a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 800, fontSize: 9, border: '1.5px solid rgba(255,255,255,.3)' }}>
               {metadata.name.charAt(0).toUpperCase()}
             </div>
@@ -1901,17 +1923,17 @@ function App() {
             <button className="db-btn" onClick={handleDownloadPDF} disabled={pdfUploadStatus === 'generating' || pdfUploadStatus === 'uploading'} style={{ background: pdfUploadStatus === 'done' ? 'rgba(34,197,94,.85)' : pdfUploadStatus === 'error' ? 'rgba(239,68,68,.85)' : pdfUploadStatus === 'generating' || pdfUploadStatus === 'uploading' ? 'rgba(99,102,241,.7)' : 'rgba(255,255,255,.15)', color: 'white', transition: 'all .3s ease' }}>
               {pdfUploadStatus === 'generating' ? '⏳ Generating…' : pdfUploadStatus === 'uploading' ? '☁️ Uploading…' : pdfUploadStatus === 'done' ? '✅ Saved!' : pdfUploadStatus === 'error' ? '❌ Failed' : '📄 PDF'}
             </button>
-            <button className="db-btn" style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>📋 Plan</button>
-            <button className="db-btn" style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>📜 History</button>
+            <button className="db-btn db-btn-hide" style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>📋 Plan</button>
+            <button className="db-btn db-btn-hide" style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>📜 History</button>
             <button className="db-btn" onClick={handleReset} style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>↺ Retake</button>
           </div>
         </div>
 
         {/* ── FIXED BODY – no scroll ── */}
-        <div style={{ flex: 1, overflow: 'hidden', padding: '6px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div className="res-body" style={{ flex: 1, overflow: 'auto', padding: '6px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
 
           {/* ═══ ROW 1: 5 Gradient KPI Cards ═══ */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6, flexShrink: 0 }}>
+          <div className="res-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6, flexShrink: 0 }}>
             {/* Overall Score */}
             <div className="fi" onClick={() => openModal('Overall Score – All 18 Domains', `Composite risk score: ${result.score}% · Click a domain row for detail`)} style={{ borderRadius: 10, padding: '8px 12px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white', position: 'relative', overflow: 'hidden', animationDelay: '0s', cursor: 'pointer', transition: 'transform .15s, box-shadow .15s' }}
               onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(99,102,241,.45)'; }}
@@ -1961,7 +1983,7 @@ function App() {
           </div>
 
           {/* ═══ ROW 2: 3-column layout – fills remaining height ═══ */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr 1fr', gap: 6, flex: 1, minHeight: 0 }}>
+          <div className="res-main-grid" style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr 1fr', gap: 6, flex: 1, minHeight: 0 }}>
 
             {/* ─── LEFT COLUMN ─── */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0 }}>

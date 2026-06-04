@@ -18,6 +18,15 @@ html, body, #root {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Mobile: allow scrolling so content isn't clipped */
+@media (max-width: 768px) {
+  html, body, #root {
+    overflow: auto;
+    height: auto;
+    min-height: 100%;
+  }
+}
+
 /* Corporate Color Scheme */
 :root {
   --color-sky-primary: #0ea5e9;
