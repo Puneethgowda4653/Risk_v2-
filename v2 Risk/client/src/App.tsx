@@ -778,6 +778,7 @@ function App() {
       <div style={{
         display: 'flex', gap: 4, marginBottom: 32,
         animation: 'retestFadeIn .6s ease .35s both',
+        flexWrap: 'wrap', justifyContent: 'center', maxWidth: 360,
       }}>
         {Array.from({ length: 12 }).map((_, i) => (
           <div key={i} style={{
@@ -793,7 +794,7 @@ function App() {
       </div>
 
       {/* Action buttons */}
-      <div style={{ display: 'flex', gap: 16, animation: 'retestFadeIn .6s ease .5s both' }}>
+      <div style={{ display: 'flex', gap: 16, animation: 'retestFadeIn .6s ease .5s both', flexWrap: 'wrap', justifyContent: 'center' }}>
         <button
           onClick={handleRetake}
           style={{
@@ -1236,10 +1237,20 @@ function App() {
         overflow: 'auto'
       }}>
         <style>{`
+          @keyframes slideIn { from { opacity:0; transform:translateX(-10px); } to { opacity:1; transform:none; } }
           @media (max-width: 768px) {
-            .assess-header { padding: 12px 16px !important; gap: 8px !important; }
-            .assess-header .assess-logo { display: none !important; }
-            .assess-body { padding: 16px 12px !important; align-items: flex-start !important; }
+            .assess-header { padding: 10px 14px !important; gap: 6px !important; }
+            .assess-logo { display: none !important; }
+            .assess-body { padding: 14px 12px !important; align-items: flex-start !important; }
+            .assess-inner { height: auto !important; }
+            .assess-question { font-size: 18px !important; }
+            .assess-card { flex: unset !important; min-height: 180px !important; }
+            .assess-nav { margin-top: 14px !important; }
+            .assess-badge { margin-bottom: 8px !important; }
+          }
+          @media (max-width: 480px) {
+            .assess-question { font-size: 16px !important; }
+            .assess-card { min-height: 160px !important; }
           }
         `}</style>
         {/* Watermarks - Graphical */}
@@ -1568,7 +1579,7 @@ function App() {
           padding: '24px 48px',
           overflow: 'auto'
         }}>
-          <div style={{
+          <div className="assess-inner" style={{
             width: '100%',
             maxWidth: 700,
             display: 'flex',
@@ -1579,7 +1590,7 @@ function App() {
           }}>
 
             {/* Domain Badge */}
-            <div style={{
+            <div className="assess-badge" style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: 6,
@@ -1598,7 +1609,7 @@ function App() {
             </div>
 
             {/* Question Text */}
-            <h2 style={{
+            <h2 className="assess-question" style={{
               fontSize: 26,
               fontWeight: 700,
               color: '#1f2937',
@@ -1625,7 +1636,7 @@ function App() {
             </p>
 
             {/* White Card - Slider */}
-            <div style={{
+            <div className="assess-card" style={{
               background: '#ffffff',
               borderRadius: 12,
               padding: '24px 18px',
@@ -1753,7 +1764,7 @@ function App() {
             </div>
 
             {/* Navigation Buttons */}
-            <div style={{
+            <div className="assess-nav" style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -1895,13 +1906,18 @@ function App() {
           .res-main-grid { grid-template-columns: 1.1fr 1fr 1fr; }
           @media (max-width: 768px) {
             .res-kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
-            .res-main-grid { grid-template-columns: 1fr !important; min-height: unset !important; flex: unset !important; }
-            .res-main-grid > * { min-height: unset !important; height: auto !important; }
-            .res-body { padding: 6px !important; overflow: auto !important; }
+            .res-main-grid { grid-template-columns: 1fr !important; flex: unset !important; }
+            .res-col { min-height: unset !important; }
+            .res-col > * { flex: unset !important; min-height: 200px !important; }
+            .res-col > .dcard { margin-bottom: 0; }
+            .res-body { padding: 6px !important; overflow: auto !important; flex: unset !important; }
             .db-btn-hide { display: none !important; }
+            .res-topbar { padding: 6px 10px !important; gap: 6px !important; }
+            .res-topbar-btns { gap: 3px !important; }
           }
           @media (max-width: 480px) {
             .res-kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
+            .res-col > * { min-height: 180px !important; }
           }
         `}</style>
 
@@ -1986,7 +2002,7 @@ function App() {
           <div className="res-main-grid" style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr 1fr', gap: 6, flex: 1, minHeight: 0 }}>
 
             {/* ─── LEFT COLUMN ─── */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0 }}>
+            <div className="res-col" style={{ display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0 }}>
               {/* Domain Performance Radar */}
               <div className="dcard fi" onClick={() => openModal('Domain Performance Radar – All Domains', 'Full radar breakdown across all 18 risk domains')} style={{ flex: 1, animationDelay: '.08s', display: 'flex', flexDirection: 'column', minHeight: 0, cursor: 'pointer', transition: 'box-shadow .2s' }}
                 onMouseEnter={e => e.currentTarget.style.boxShadow = '0 0 0 2px #6366f1'}
@@ -2068,7 +2084,7 @@ function App() {
             </div>
 
             {/* ─── CENTER COLUMN ─── */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0 }}>
+            <div className="res-col" style={{ display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0 }}>
               {/* Overall Health Gauge */}
               <div className="dcard fi" onClick={() => openModal('Overall Health – Score Per Domain', `Composite score: ${result.score}% · All 18 domains ranked`)} style={{ animationDelay: '.1s', cursor: 'pointer', transition: 'box-shadow .2s' }}
                 onMouseEnter={e => e.currentTarget.style.boxShadow = '0 0 0 2px #6366f1'}
@@ -2173,7 +2189,7 @@ function App() {
             </div>
 
             {/* ─── RIGHT COLUMN ─── */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0 }}>
+            <div className="res-col" style={{ display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0 }}>
               {/* Risk Heat Map */}
               <div className="dcard fi" style={{ animationDelay: '.12s' }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#111827' }}>🗺️ Risk Heat Map</div>
