@@ -1876,7 +1876,7 @@ function App() {
     const confidenceLabel = validityScore > 90 ? 'High Confidence' : validityScore > 70 ? 'Medium Confidence' : 'Low Confidence';
 
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans', system-ui, sans-serif", background: '#f4f5f7', overflow: 'auto' }}>
+      <div className="res-root" style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans', system-ui, sans-serif", background: '#f4f5f7', overflow: 'hidden' }}>
         <style>{SHARED_STYLES + `
           ::-webkit-scrollbar { width: 0; height: 0; }
           @keyframes fadeUp { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
@@ -1884,21 +1884,18 @@ function App() {
           .dcard { background:white; border-radius:10px; padding:8px 10px; box-shadow:0 1px 6px rgba(0,0,0,.04); border:1px solid #f0f0f0; }
           .db-btn { padding:4px 10px; border-radius:16px; font-size:9px; font-weight:600; font-family:inherit; cursor:pointer; border:none; transition:all .2s; display:inline-flex; align-items:center; gap:4px; }
           .db-btn:hover { transform:translateY(-1px); box-shadow:0 2px 6px rgba(0,0,0,.12); }
-          .res-topbar { flex-wrap: wrap; height: auto !important; min-height: 40px; }
-          .res-topbar-btns { flex-wrap: wrap; gap: 4px; }
-          .res-body { overflow: auto !important; }
           .res-kpi-grid { grid-template-columns: repeat(5, 1fr); }
           .res-main-grid { grid-template-columns: 1.1fr 1fr 1fr; }
           @media (max-width: 768px) {
+            .res-root { height: auto !important; overflow: auto !important; }
+            .res-topbar { flex-wrap: wrap; height: auto !important; min-height: 40px; padding: 6px 10px !important; }
+            .res-topbar-btns { flex-wrap: wrap; gap: 3px !important; }
             .res-kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
             .res-main-grid { grid-template-columns: 1fr !important; flex: unset !important; }
             .res-col { min-height: unset !important; }
             .res-col > * { flex: unset !important; min-height: 200px !important; }
-            .res-col > .dcard { margin-bottom: 0; }
             .res-body { padding: 6px !important; overflow: auto !important; flex: unset !important; }
             .db-btn-hide { display: none !important; }
-            .res-topbar { padding: 6px 10px !important; gap: 6px !important; }
-            .res-topbar-btns { gap: 3px !important; }
           }
           @media (max-width: 480px) {
             .res-kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
@@ -1930,8 +1927,8 @@ function App() {
           </div>
         </div>
 
-        {/* ── FIXED BODY – no scroll ── */}
-        <div className="res-body" style={{ flex: 1, overflow: 'auto', padding: '6px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {/* ── FIXED BODY – no scroll on desktop, scrollable on mobile ── */}
+        <div className="res-body" style={{ flex: 1, overflow: 'hidden', padding: '6px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
 
           {/* ═══ ROW 1: 5 Gradient KPI Cards ═══ */}
           <div className="res-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6, flexShrink: 0 }}>
