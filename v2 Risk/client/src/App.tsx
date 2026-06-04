@@ -1238,9 +1238,7 @@ function App() {
       }}>
         <style>{`
           @keyframes slideIn { from { opacity:0; transform:translateX(-10px); } to { opacity:1; transform:none; } }
-          @media (max-width: 768px) {
-            .assess-header { padding: 10px 14px !important; gap: 6px !important; }
-            .assess-logo { display: none !important; }
+          @media (max-width: 600px) {
             .assess-body { padding: 14px 12px !important; align-items: flex-start !important; }
             .assess-inner { height: auto !important; }
             .assess-question { font-size: 18px !important; }
@@ -1248,7 +1246,7 @@ function App() {
             .assess-nav { margin-top: 14px !important; }
             .assess-badge { margin-bottom: 8px !important; }
           }
-          @media (max-width: 480px) {
+          @media (max-width: 400px) {
             .assess-question { font-size: 16px !important; }
             .assess-card { min-height: 160px !important; }
           }
@@ -1509,64 +1507,54 @@ function App() {
         </svg>
 
         {/* Header */}
-        <div className="assess-header" style={{
-          padding: '16px 48px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+        <div style={{
           background: '#e0f7ff',
           borderBottom: '1px solid #e5e7eb',
           zIndex: 20,
           flexShrink: 0,
-          gap: 24
         }}>
-          {/* Left Section */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{
-              fontSize: 10,
-              fontWeight: 700,
-              color: '#6b7280',
-              letterSpacing: 0.4,
-              textTransform: 'uppercase',
-              marginBottom: 2
-            }}>
-              Assessment Progress
-            </div>
-            <div style={{
-              fontSize: 20,
-              fontWeight: 700,
-              color: '#1f2937'
-            }}>
-              Question {currentQIndex + 1} <span style={{ fontSize: 13, color: '#9ca3af' }}>/ {sessionQuestions.length}</span>
-            </div>
-          </div>
-
-          {/* Center - Logo */}
-          <div className="assess-logo" style={{
+          {/* Top row: question info + logo + progress */}
+          <div style={{
+            padding: '12px 24px',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            flex: 1
+            justifyContent: 'space-between',
+            gap: 12,
           }}>
+            {/* Left: question counter */}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', letterSpacing: 0.4, textTransform: 'uppercase', marginBottom: 2 }}>
+                Assessment Progress
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap' }}>
+                Question {currentQIndex + 1} <span style={{ fontSize: 13, color: '#9ca3af' }}>/ {sessionQuestions.length}</span>
+              </div>
+            </div>
+
+            {/* Center: Logo – hidden on small screens via maxWidth trick */}
             <img
               src="infopace-logo-300x128.webp"
               alt="Company Logo"
               style={{
-                height: 65,
-                maxWidth: 200,
+                height: 48,
+                maxWidth: 140,
                 objectFit: 'contain',
-                objectPosition: 'center'
+                flexShrink: 1,
+                minWidth: 0,
               }}
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-              }}
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
             />
+
+            {/* Right: progress % */}
+            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#0ea9c8', lineHeight: 1 }}>{Math.round(progress)}%</div>
+              <div style={{ fontSize: 10, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3 }}>Complete</div>
+            </div>
           </div>
 
-          {/* Right Section */}
-          <div style={{ flex: 1, textAlign: 'right', minWidth: 0 }}>
-            <div style={{ fontSize: 20, fontWeight: 800, color: '#0ea9c8', marginBottom: 2 }}>{Math.round(progress)}%</div>
-            <div style={{ fontSize: 10, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3 }}>Complete</div>
+          {/* Progress bar */}
+          <div style={{ height: 4, background: '#c7e8f5' }}>
+            <div style={{ height: '100%', width: `${progress}%`, background: '#0ea9c8', transition: 'width 0.4s ease' }} />
           </div>
         </div>
 
