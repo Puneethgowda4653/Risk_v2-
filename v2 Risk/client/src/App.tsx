@@ -467,6 +467,7 @@ function App() {
   const [pdfUploadStatus, setPdfUploadStatus] = useState<'idle' | 'generating' | 'uploading' | 'done' | 'error'>('idle');
   const [showEarlyBirdsPopup, setShowEarlyBirdsPopup] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
   const [historyStatus, setHistoryStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [historyItems, setHistoryItems] = useState<any[]>([]);
 
@@ -1946,7 +1947,7 @@ function App() {
             <button className="db-btn" onClick={handleDownloadPDF} disabled={pdfUploadStatus === 'generating' || pdfUploadStatus === 'uploading'} style={{ background: pdfUploadStatus === 'done' ? 'rgba(34,197,94,.85)' : pdfUploadStatus === 'error' ? 'rgba(239,68,68,.85)' : pdfUploadStatus === 'generating' || pdfUploadStatus === 'uploading' ? 'rgba(99,102,241,.7)' : 'rgba(255,255,255,.15)', color: 'white', transition: 'all .3s ease' }}>
               {pdfUploadStatus === 'generating' ? '⏳ Generating…' : pdfUploadStatus === 'uploading' ? '☁️ Uploading…' : pdfUploadStatus === 'done' ? '✅ Saved!' : pdfUploadStatus === 'error' ? '❌ Failed' : '📄 PDF'}
             </button>
-            <button className="db-btn db-btn-hide" style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>📋 Plan</button>
+            <button className="db-btn db-btn-hide" onClick={() => setPlanOpen(true)} style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>📋 Plan</button>
             <button className="db-btn db-btn-hide" onClick={handleShowHistory} style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>📜 History</button>
             <button className="db-btn" onClick={handleReset} style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>↺ Retake</button>
           </div>
@@ -2398,6 +2399,70 @@ function App() {
             onClose={closeModal}
           />
         )}
+
+        {/* ── 90-DAY ACTION PLAN PANEL ── */}
+        {planOpen && (() => {
+          const urgentFlags = result.flags.filter((f: any) => f.type === 'CRITICAL' || f.type === 'ORANGE').slice(0, 3);
+          const phases = [
+            {
+              title: 'Month 1 · Contain critical risks', color: '#ef4444',
+              items: [
+                ...urgentFlags.map((f: any) => `Resolve ${f.type.toLowerCase()} flag in ${f.domain} (${f.trigger})`),
+                ...sorted.slice(0, 2).map(([, d]) => `Fix ${d.name.toLowerCase()} — ${Math.round(d.score)}% risk`),
+              ],
+            },
+            {
+              title: 'Month 2 · Strengthen weak areas', color: '#f59e0b',
+              items: [
+                ...sorted.slice(2, 5).map(([, d]) => `Improve ${d.name.toLowerCase()} — ${Math.round(d.score)}% risk`),
+                'Train the team on the risk practices introduced in Month 1',
+              ],
+            },
+            {
+              title: 'Month 3 · Embed & reassess', color: '#10b981',
+              items: [
+                'Embed new risk practices into regular operations',
+                `Maintain strength in ${strongest[1].name.toLowerCase()} — ${Math.round(strongest[1].score)}% risk`,
+                'Retake the assessment to measure progress',
+              ],
+            },
+          ];
+          return (
+            <div onClick={() => setPlanOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,15,35,.55)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9000, animation: 'fadeIn .2s ease' }}>
+              <div onClick={e => e.stopPropagation()} style={{ background: 'white', borderRadius: 16, width: '92vw', maxWidth: 640, maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,.35)', overflow: 'hidden', animation: 'slideUp .22s ease' }}>
+                {/* Header */}
+                <div style={{ padding: '16px 20px', background: 'linear-gradient(135deg,#1e1b4b,#312e81)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+                  <div>
+                    <div style={{ color: 'white', fontSize: 15, fontWeight: 800, letterSpacing: -.2 }}>📋 90-Day Action Plan</div>
+                    <div style={{ color: 'rgba(255,255,255,.55)', fontSize: 10, marginTop: 2 }}>{metadata.companyName} · based on your {domains.length}-domain assessment</div>
+                  </div>
+                  <button onClick={() => setPlanOpen(false)} style={{ background: 'rgba(255,255,255,.1)', border: 'none', color: 'white', borderRadius: 8, width: 30, height: 30, cursor: 'pointer', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                </div>
+
+                {/* Body */}
+                <div style={{ overflowY: 'auto', flex: 1, padding: '14px 20px' }}>
+                  {phases.map(phase => (
+                    <div key={phase.title} style={{ marginBottom: 12, borderLeft: `3px solid ${phase.color}`, borderRadius: 8, background: '#fafafa', padding: '10px 14px' }}>
+                      <div style={{ fontSize: 10, fontWeight: 800, color: phase.color, textTransform: 'uppercase', letterSpacing: .4, marginBottom: 6 }}>{phase.title}</div>
+                      {phase.items.map((item, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 11, color: '#374151', marginBottom: 4 }}>
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: phase.color, flexShrink: 0, marginTop: 4 }} />
+                          <span style={{ fontWeight: 500 }}>{item.charAt(0).toUpperCase() + item.slice(1)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Footer */}
+                <div style={{ padding: '10px 20px', borderTop: '1px solid #e5e7eb', background: '#f9fafb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+                  <span style={{ fontSize: 9, color: '#9ca3af' }}>Priorities are ranked from your highest-risk domains and flags</span>
+                  <button onClick={() => setPlanOpen(false)} style={{ padding: '6px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: 'white', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Close</button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── ASSESSMENT HISTORY PANEL ── */}
         {historyOpen && (
