@@ -466,6 +466,9 @@ function App() {
   const [supabaseSaveStatus, setSupabaseSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [pdfUploadStatus, setPdfUploadStatus] = useState<'idle' | 'generating' | 'uploading' | 'done' | 'error'>('idle');
   const [showEarlyBirdsPopup, setShowEarlyBirdsPopup] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyStatus, setHistoryStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [historyItems, setHistoryItems] = useState<any[]>([]);
 
   const openModal = (title: string, subtitle?: string) => setModal({ title, subtitle });
   const closeModal = () => setModal(null);
@@ -625,6 +628,28 @@ function App() {
         setTimeout(() => setPdfUploadStatus('idle'), 4000);
       }
     }, 500);
+  };
+
+  /* ── Load past assessments for the History panel ── */
+  const handleShowHistory = async () => {
+    setHistoryOpen(true);
+    setHistoryStatus('loading');
+    try {
+      const res = await fetch(`${API_URL}/api/user/${encodeURIComponent(metadata.email)}/assessments`);
+      if (res.status === 404) {
+        // User has no saved assessments yet
+        setHistoryItems([]);
+        setHistoryStatus('ready');
+        return;
+      }
+      if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
+      const data = await res.json();
+      setHistoryItems(Array.isArray(data.assessments) ? data.assessments : []);
+      setHistoryStatus('ready');
+    } catch (err) {
+      console.error('❌ Failed to load assessment history:', err);
+      setHistoryStatus('error');
+    }
   };
 
   /* ── Straight-lining detection ── */
@@ -1922,7 +1947,7 @@ function App() {
               {pdfUploadStatus === 'generating' ? '⏳ Generating…' : pdfUploadStatus === 'uploading' ? '☁️ Uploading…' : pdfUploadStatus === 'done' ? '✅ Saved!' : pdfUploadStatus === 'error' ? '❌ Failed' : '📄 PDF'}
             </button>
             <button className="db-btn db-btn-hide" style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>📋 Plan</button>
-            <button className="db-btn db-btn-hide" style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>📜 History</button>
+            <button className="db-btn db-btn-hide" onClick={handleShowHistory} style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>📜 History</button>
             <button className="db-btn" onClick={handleReset} style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>↺ Retake</button>
           </div>
         </div>
@@ -2372,6 +2397,73 @@ function App() {
             domains={domains}
             onClose={closeModal}
           />
+        )}
+
+        {/* ── ASSESSMENT HISTORY PANEL ── */}
+        {historyOpen && (
+          <div onClick={() => setHistoryOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,15,35,.55)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9000, animation: 'fadeIn .2s ease' }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: 'white', borderRadius: 16, width: '92vw', maxWidth: 640, maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,.35)', overflow: 'hidden', animation: 'slideUp .22s ease' }}>
+              {/* Header */}
+              <div style={{ padding: '16px 20px', background: 'linear-gradient(135deg,#1e1b4b,#312e81)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+                <div>
+                  <div style={{ color: 'white', fontSize: 15, fontWeight: 800, letterSpacing: -.2 }}>📜 Assessment History</div>
+                  <div style={{ color: 'rgba(255,255,255,.55)', fontSize: 10, marginTop: 2 }}>{metadata.email}</div>
+                </div>
+                <button onClick={() => setHistoryOpen(false)} style={{ background: 'rgba(255,255,255,.1)', border: 'none', color: 'white', borderRadius: 8, width: 30, height: 30, cursor: 'pointer', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+              </div>
+
+              {/* Body */}
+              <div style={{ overflowY: 'auto', flex: 1, padding: '14px 20px' }}>
+                {historyStatus === 'loading' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px 0' }}>
+                    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', border: '3px solid #e5e7eb', borderTopColor: '#6366f1', animation: 'spin 0.8s linear infinite', marginBottom: 10 }} />
+                    <span style={{ fontSize: 11, color: '#9ca3af' }}>Loading your past assessments…</span>
+                  </div>
+                )}
+                {historyStatus === 'error' && (
+                  <div style={{ textAlign: 'center', padding: '32px 0' }}>
+                    <div style={{ fontSize: 26, marginBottom: 8 }}>⚠️</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Couldn't load your history</div>
+                    <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 14 }}>Check your connection and try again.</div>
+                    <button onClick={handleShowHistory} style={{ padding: '6px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: 'white', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Retry</button>
+                  </div>
+                )}
+                {historyStatus === 'ready' && historyItems.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '32px 0' }}>
+                    <div style={{ fontSize: 26, marginBottom: 8 }}>🗂️</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4 }}>No past assessments yet</div>
+                    <div style={{ fontSize: 10, color: '#9ca3af' }}>Completed assessments are saved automatically and will appear here.</div>
+                  </div>
+                )}
+                {historyStatus === 'ready' && historyItems.map((a, idx) => {
+                  const domainCount = a.domain_scores ? Object.keys(a.domain_scores).length : 0;
+                  const flagCount = Array.isArray(a.flags) ? a.flags.length : 0;
+                  const when = a.created_at ? new Date(a.created_at).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+                  return (
+                    <div key={a.id || idx} style={{ display: 'grid', gridTemplateColumns: '24px 1fr 64px 90px', alignItems: 'center', gap: 12, padding: '9px 10px', borderRadius: 8, marginBottom: 4, background: idx === 0 ? '#f5f3ff' : '#fafafa', border: '1px solid #f0f0f0' }}>
+                      <div style={{ fontSize: 10, fontWeight: 800, color: '#9ca3af', textAlign: 'center' }}>{idx + 1}</div>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#111827' }}>
+                          {when}
+                          {idx === 0 && <span style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 8, fontSize: 7, fontWeight: 800, background: '#6366f1', color: 'white', verticalAlign: 'middle' }}>LATEST</span>}
+                        </div>
+                        <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 2 }}>{domainCount} domains · {flagCount} flag{flagCount === 1 ? '' : 's'}</div>
+                      </div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: scoreColor(a.score), textAlign: 'right' }}>{Math.round(a.score)}%</div>
+                      <div style={{ padding: '3px 8px', borderRadius: 10, fontSize: 8, fontWeight: 700, color: 'white', textAlign: 'center', background: scoreColor(a.score), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.rating || '—'}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Footer */}
+              <div style={{ padding: '10px 20px', borderTop: '1px solid #e5e7eb', background: '#f9fafb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+                <span style={{ fontSize: 9, color: '#9ca3af' }}>{historyStatus === 'ready' ? `${historyItems.length} saved assessment${historyItems.length === 1 ? '' : 's'}` : ''}</span>
+                <button onClick={() => setHistoryOpen(false)} style={{ padding: '6px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: 'white', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Close</button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* ── EARLY BIRDS POPUP ── */}
