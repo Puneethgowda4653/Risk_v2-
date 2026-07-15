@@ -550,13 +550,17 @@ function App() {
 
   /* ── Save completed assessment to Supabase via backend ── */
   const saveToSupabase = async () => {
-    if (!serverSessionId) return;
+    if (!metadata) return;
     setSupabaseSaveStatus('saving');
     try {
       const res = await fetch(`${API_URL}/api/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: serverSessionId }),
+        body: JSON.stringify({
+          sessionId: serverSessionId,
+          metadata,
+          responses: responses.map(r => ({ domain: r.domainId, value: r.value })),
+        }),
       });
       const data = await res.json();
       if (data.assessmentId) {

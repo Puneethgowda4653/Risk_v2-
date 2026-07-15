@@ -26,21 +26,25 @@ app.post('/api/respond', (req, res) => {
 });
 
 app.post('/api/complete', async (req, res) => {
-  const { sessionId } = req.body;
+  const { sessionId, metadata: bodyMetadata, responses: bodyResponses } = req.body;
   const session = sessions[sessionId];
-  if (!session) return res.status(404).json({ error: 'Session not found' });
-  
-  const result = calculateScore(session.responses, session.metadata);
-  
+  // The in-memory session is wiped on every backend restart/redeploy, so fall
+  // back to the metadata/responses the client already has in state.
+  const metadata = session ? session.metadata : bodyMetadata;
+  const responses = session ? session.responses : bodyResponses;
+  if (!metadata || !responses) return res.status(404).json({ error: 'Assessment data not found' });
+
+  const result = calculateScore(responses, metadata);
+
   try {
     // Save user to Supabase if not exists
     let userId = null;
     const { data: existingUser, error: userFetchError } = await supabase
       .from('users')
       .select('id')
-      .eq('email', session.metadata.email)
+      .eq('email', metadata.email)
       .single();
-    
+
     if (existingUser) {
       userId = existingUser.id;
     } else {
@@ -49,13 +53,13 @@ app.post('/api/complete', async (req, res) => {
         .from('users')
         .insert([
           {
-            name: session.metadata.name,
-            email: session.metadata.email,
-            company_name: session.metadata.companyName,
-            stage: session.metadata.stage,
-            vertical: session.metadata.vertical,
-            uses_ai: session.metadata.usesAi,
-            physical_product: session.metadata.physicalProduct
+            name: metadata.name,
+            email: metadata.email,
+            company_name: metadata.companyName,
+            stage: metadata.stage,
+            vertical: metadata.vertical,
+            uses_ai: metadata.usesAi,
+            physical_product: metadata.physicalProduct
           }
         ])
         .select('id')
