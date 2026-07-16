@@ -1082,7 +1082,7 @@ function App() {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'center',
+        justifyContent: 'safe center',
         padding: '24px 24px 12px',
         overflow: 'auto',
       }}>
