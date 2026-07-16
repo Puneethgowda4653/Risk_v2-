@@ -1926,7 +1926,6 @@ function App() {
               {pdfUploadStatus === 'generating' ? '⏳ Generating…' : pdfUploadStatus === 'uploading' ? '☁️ Uploading…' : pdfUploadStatus === 'done' ? '✅ Saved!' : pdfUploadStatus === 'error' ? '❌ Failed' : '📄 PDF'}
             </button>
             <button className="db-btn db-btn-hide" style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>📋 Plan</button>
-            <button className="db-btn db-btn-hide" style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>📜 History</button>
             <button className="db-btn" onClick={handleReset} style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>↺ Retake</button>
           </div>
         </div>
