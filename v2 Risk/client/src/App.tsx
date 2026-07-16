@@ -446,99 +446,6 @@ function DrillDownModal({
   );
 }
 
-function HistoryModal({
-  assessments,
-  loading,
-  error,
-  onClose,
-}: {
-  assessments: { id: number; score: number; rating: string; created_at: string }[];
-  loading: boolean;
-  error: string | null;
-  onClose: () => void;
-}) {
-  const getColor = (s: number) =>
-    s >= 70 ? '#dc2626' : s >= 55 ? '#f97316' : s >= 40 ? '#eab308' : s >= 25 ? '#84cc16' : '#22c55e';
-
-  return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 9999,
-        background: 'rgba(10,14,26,0.72)',
-        backdropFilter: 'blur(6px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        animation: 'fadeIn .18s ease',
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: 'white', borderRadius: 16, width: '92vw', maxWidth: 560,
-          maxHeight: '80vh', display: 'flex', flexDirection: 'column',
-          boxShadow: '0 32px 80px rgba(0,0,0,.35)', overflow: 'hidden',
-          animation: 'slideUp .22s ease',
-        }}
-      >
-        {/* Header */}
-        <div style={{
-          padding: '16px 20px', background: 'linear-gradient(135deg,#1e1b4b,#312e81)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
-        }}>
-          <div style={{ color: 'white', fontSize: 15, fontWeight: 800, letterSpacing: -.2 }}>Assessment History</div>
-          <button
-            className="dd-close"
-            onClick={onClose}
-            style={{
-              background: 'rgba(255,255,255,.1)', border: 'none', color: 'white',
-              borderRadius: 8, width: 30, height: 30, cursor: 'pointer', fontSize: 15,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .2s',
-            }}
-          >×</button>
-        </div>
-
-        {/* Body */}
-        <div style={{ overflowY: 'auto', flex: 1, padding: '14px 20px' }}>
-          {loading && <div style={{ textAlign: 'center', color: '#9ca3af', fontSize: 12, padding: '30px 0' }}>Loading past assessments…</div>}
-          {!loading && error && <div style={{ textAlign: 'center', color: '#dc2626', fontSize: 12, padding: '30px 0' }}>{error}</div>}
-          {!loading && !error && assessments.length === 0 && (
-            <div style={{ textAlign: 'center', color: '#9ca3af', fontSize: 12, padding: '30px 0' }}>No past assessments found.</div>
-          )}
-          {!loading && !error && assessments.map((a) => {
-            const col = getColor(a.score);
-            const date = new Date(a.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-            return (
-              <div key={a.id} className="dd-row" style={{
-                display: 'grid', gridTemplateColumns: '1fr 60px 90px', alignItems: 'center', gap: 12,
-                padding: '10px 8px', borderRadius: 8, marginBottom: 4, background: '#f9fafb',
-              }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#111827' }}>{date}</div>
-                <div style={{ fontSize: 14, fontWeight: 800, color: col, textAlign: 'right' }}>{a.score}%</div>
-                <div style={{
-                  padding: '3px 8px', borderRadius: 10, fontSize: 9, fontWeight: 700,
-                  color: 'white', textAlign: 'center', background: col, whiteSpace: 'nowrap',
-                }}>{a.rating}</div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Footer */}
-        <div style={{
-          padding: '10px 20px', borderTop: '1px solid #e5e7eb', background: '#f9fafb',
-          display: 'flex', justifyContent: 'flex-end', flexShrink: 0,
-        }}>
-          <button onClick={onClose} style={{
-            padding: '6px 18px', borderRadius: 8, border: 'none',
-            background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: 'white',
-            fontSize: 11, fontWeight: 700, cursor: 'pointer',
-          }}>Close</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ══════════════════════════════════════════════════════════════════════════════
    APP
 ══════════════════════════════════════════════════════════════════════════════ */
@@ -557,10 +464,6 @@ function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [serverSessionId, setServerSessionId] = useState<string | null>(null);
   const [supabaseSaveStatus, setSupabaseSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [showHistory, setShowHistory] = useState(false);
-  const [historyAssessments, setHistoryAssessments] = useState<{ id: number; score: number; rating: string; created_at: string }[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState<string | null>(null);
   const [pdfUploadStatus, setPdfUploadStatus] = useState<'idle' | 'generating' | 'uploading' | 'done' | 'error'>('idle');
   const [showEarlyBirdsPopup, setShowEarlyBirdsPopup] = useState(false);
 
@@ -671,28 +574,6 @@ function App() {
       console.error('❌ Failed to save to Supabase:', err);
       setSupabaseSaveStatus('error');
     }
-  };
-
-  /* ── Fetch this user's past assessments ── */
-  const handleShowHistory = async () => {
-    setShowHistory(true);
-    setHistoryLoading(true);
-    setHistoryError(null);
-    try {
-      const res = await fetch(`${API_URL}/api/user/${encodeURIComponent(metadata.email)}/assessments`);
-      if (res.status === 404) {
-        setHistoryAssessments([]);
-      } else if (!res.ok) {
-        setHistoryError('Failed to load history');
-      } else {
-        const data = await res.json();
-        setHistoryAssessments(data.assessments || []);
-      }
-    } catch (err) {
-      console.error('❌ Failed to load history:', err);
-      setHistoryError('Could not reach server');
-    }
-    setHistoryLoading(false);
   };
 
   /* ── Download PDF & upload to Supabase ── */
@@ -2045,7 +1926,7 @@ function App() {
               {pdfUploadStatus === 'generating' ? '⏳ Generating…' : pdfUploadStatus === 'uploading' ? '☁️ Uploading…' : pdfUploadStatus === 'done' ? '✅ Saved!' : pdfUploadStatus === 'error' ? '❌ Failed' : '📄 PDF'}
             </button>
             <button className="db-btn db-btn-hide" style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>📋 Plan</button>
-            <button className="db-btn db-btn-hide" onClick={handleShowHistory} style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>📜 History</button>
+            <button className="db-btn db-btn-hide" style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>📜 History</button>
             <button className="db-btn" onClick={handleReset} style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>↺ Retake</button>
           </div>
         </div>
@@ -2494,16 +2375,6 @@ function App() {
             subtitle={modal.subtitle}
             domains={domains}
             onClose={closeModal}
-          />
-        )}
-
-        {/* ── HISTORY MODAL ── */}
-        {showHistory && (
-          <HistoryModal
-            assessments={historyAssessments}
-            loading={historyLoading}
-            error={historyError}
-            onClose={() => setShowHistory(false)}
           />
         )}
 
