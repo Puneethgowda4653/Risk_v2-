@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 // @ts-ignore
-import { generateUniqueAssessment, calculateRiskScore, getBenchmarkData } from './utils/riskEngine';
+import { generateUniqueAssessment, calculateRiskScore, getBenchmarkData, DOMAINS } from './utils/riskEngine';
 // @ts-ignore
 import { generatePDF } from './utils/pdfGenerator';
 import './index.css';
@@ -21,6 +21,27 @@ const scoreColor = (s: number) => s > 70 ? '#ef4444' : s > 55 ? '#f97316' : s > 
 const _scoreLabel = (s: number) => s > 85 ? 'EXISTENTIAL' : s > 70 ? 'CRITICAL' : s > 55 ? 'HIGH' : s > 40 ? 'MODERATE' : s > 25 ? 'LOW' : 'MINIMAL';
 const _flagBorder = (t: string) => t === 'CRITICAL' ? '#ef4444' : t === 'ORANGE' ? '#f97316' : '#eab308';
 const _flagBg = (t: string) => t === 'CRITICAL' ? '#fef2f2' : t === 'ORANGE' ? '#fff7ed' : '#fefce8';
+
+/* ─── rebuild a client-shaped result from a stored assessment row ─────────── */
+function reconstructResultFromRow(row: any) {
+  const domainScores: Record<string, { score: number; name: string; weight: number; tier: number }> = {};
+  Object.entries(row.domain_scores || {}).forEach(([id, score]) => {
+    const d = DOMAINS.find((dm: any) => dm.id === id);
+    domainScores[id] = { score: score as number, name: d?.name || id, weight: d?.weight || 0, tier: d?.tier || 1 };
+  });
+  const flags = (row.flags || []).map((f: any) => ({
+    ...f,
+    domain: DOMAINS.find((dm: any) => dm.id === f.domain)?.name || f.domain,
+  }));
+  return {
+    score: row.score,
+    rating: row.rating,
+    domainScores,
+    flags,
+    polycrisisTriggered: row.polycrisis_triggered,
+    highRiskCount: row.high_risk_count,
+  };
+}
 
 /* ─── smooth SVG curve ─────────────────────────────────────────────────────── */
 function curvePath(vals: number[], W: number, H: number, closed = false) {
@@ -466,6 +487,10 @@ function App() {
   const [supabaseSaveStatus, setSupabaseSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [pdfUploadStatus, setPdfUploadStatus] = useState<'idle' | 'generating' | 'uploading' | 'done' | 'error'>('idle');
   const [showEarlyBirdsPopup, setShowEarlyBirdsPopup] = useState(false);
+  const [authMode, setAuthMode] = useState<'signup' | 'login'>('signup');
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   const openModal = (title: string, subtitle?: string) => setModal({ title, subtitle });
   const closeModal = () => setModal(null);
@@ -531,6 +556,58 @@ function App() {
     setResponses([]);
     setSliderValue(3);
     setIsGenerating(false);
+  };
+
+  /* ── Returning user: look up their profile and pick up where they left off ── */
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginEmail) return;
+    setLoginLoading(true);
+    setLoginError(null);
+    try {
+      const profileRes = await fetch(`${API_URL}/api/user/${encodeURIComponent(loginEmail)}`);
+      if (profileRes.status === 404) {
+        setLoginError('No account found for this email. Try signing up instead.');
+        setLoginLoading(false);
+        return;
+      }
+      if (!profileRes.ok) {
+        setLoginError('Could not reach server. Please try again.');
+        setLoginLoading(false);
+        return;
+      }
+      const profile = await profileRes.json();
+      const loadedMetadata: Metadata = {
+        name: profile.name,
+        companyName: profile.company_name,
+        email: profile.email,
+        stage: profile.stage,
+        vertical: profile.vertical,
+        usesAi: profile.uses_ai,
+        physicalProduct: profile.physical_product,
+      };
+      setMetadata(loadedMetadata);
+
+      const historyRes = await fetch(`${API_URL}/api/user/${encodeURIComponent(loginEmail)}/assessments`);
+      const historyData = historyRes.ok ? await historyRes.json() : { assessments: [] };
+      const latest = historyData.assessments?.[0];
+
+      if (latest) {
+        setResult(reconstructResultFromRow(latest));
+        setStep('results');
+      } else {
+        // No past assessment yet — go straight into a new one with their known profile
+        setSessionQuestions(generateUniqueAssessment(loadedMetadata));
+        setStep('assessment');
+        setCurrentQIndex(0);
+        setResponses([]);
+        setSliderValue(3);
+      }
+    } catch (err) {
+      console.error('❌ Login failed:', err);
+      setLoginError('Could not reach server. Please try again.');
+    }
+    setLoginLoading(false);
   };
 
   /* ── Send a single response to the backend (fire-and-forget) ── */
@@ -1046,9 +1123,36 @@ function App() {
             fontSize: 1, color: '#64748b', fontWeight: 400,
             marginBottom: 20,
           }}>
-            Please enter your details to sign in.
+            {authMode === 'signup' ? 'Please enter your details to sign in.' : 'Enter your email to continue.'}
           </p>
 
+          {/* ── Sign Up / Log In toggle ── */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 16, background: '#f1f5f9', borderRadius: 10, padding: 4 }}>
+            <button
+              type="button"
+              onClick={() => { setAuthMode('signup'); setLoginError(null); }}
+              style={{
+                flex: 1, padding: '8px 0', borderRadius: 7, border: 'none', cursor: 'pointer',
+                fontSize: 12, fontWeight: 700, transition: 'all .15s',
+                background: authMode === 'signup' ? 'white' : 'transparent',
+                color: authMode === 'signup' ? '#0f172a' : '#64748b',
+                boxShadow: authMode === 'signup' ? '0 1px 3px rgba(0,0,0,.08)' : 'none',
+              }}
+            >Sign Up</button>
+            <button
+              type="button"
+              onClick={() => { setAuthMode('login'); setLoginError(null); }}
+              style={{
+                flex: 1, padding: '8px 0', borderRadius: 7, border: 'none', cursor: 'pointer',
+                fontSize: 12, fontWeight: 700, transition: 'all .15s',
+                background: authMode === 'login' ? 'white' : 'transparent',
+                color: authMode === 'login' ? '#0f172a' : '#64748b',
+                boxShadow: authMode === 'login' ? '0 1px 3px rgba(0,0,0,.08)' : 'none',
+              }}
+            >Log In</button>
+          </div>
+
+          {authMode === 'signup' && (
           <form onSubmit={handleRegisterAndStart} className="ip-form-gap" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
             {/* ── Full Name ── */}
@@ -1190,6 +1294,42 @@ function App() {
               </svg>
             </button>
           </form>
+          )}
+
+          {authMode === 'login' && (
+          <form onSubmit={handleLogin} className="ip-form-gap" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label className="ip-field-label" style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
+                Email Address
+              </label>
+              <div className="ip-field-wrap">
+                <span className="ip-field-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="4" width="20" height="16" rx="2" />
+                    <path d="M22 7l-10 6L2 7" />
+                  </svg>
+                </span>
+                <input type="email" placeholder="you@example.com" value={loginEmail}
+                  onChange={e => setLoginEmail(e.target.value)} required className="ip-field" />
+              </div>
+            </div>
+
+            {loginError && (
+              <div style={{ fontSize: 12, color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 10px' }}>
+                {loginError}
+              </div>
+            )}
+
+            <button type="submit" disabled={loginLoading} className="ip-btn" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, opacity: loginLoading ? 0.7 : 1 }}>
+              {loginLoading ? 'Logging in…' : 'Log In'}
+              {!loginLoading && (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+                </svg>
+              )}
+            </button>
+          </form>
+          )}
 
           {/* ── Security Notice ── */}
           <div className="ip-security-notice" style={{
