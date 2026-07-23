@@ -7,6 +7,7 @@ import CursorField from './CursorField';
 import './index.css';
 
 const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:3001' : window.location.origin);
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 type Step = 'onboarding' | 'assessment' | 'results' | 'retest';
 type BusinessStage = 'pre-seed' | 'seed' | 'series-a' | 'series-b' | 'series-c+';
@@ -492,6 +493,7 @@ function App() {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const openModal = (title: string, subtitle?: string) => setModal({ title, subtitle });
   const closeModal = () => setModal(null);
@@ -559,24 +561,13 @@ function App() {
     setIsGenerating(false);
   };
 
-  /* ── Returning user: look up their profile and pick up where they left off ── */
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!loginEmail) return;
-    setLoginLoading(true);
-    setLoginError(null);
+  /* ── Look up a profile by email and resume where they left off ── */
+  const loginByEmail = async (email: string): Promise<'ok' | 'notfound' | 'error'> => {
     try {
-      const profileRes = await fetch(`${API_URL}/api/user/${encodeURIComponent(loginEmail)}`);
-      if (profileRes.status === 404) {
-        setLoginError('No account found for this email. Try signing up instead.');
-        setLoginLoading(false);
-        return;
-      }
-      if (!profileRes.ok) {
-        setLoginError('Could not reach server. Please try again.');
-        setLoginLoading(false);
-        return;
-      }
+      const profileRes = await fetch(`${API_URL}/api/user/${encodeURIComponent(email)}`);
+      if (profileRes.status === 404) return 'notfound';
+      if (!profileRes.ok) return 'error';
+
       const profile = await profileRes.json();
       const loadedMetadata: Metadata = {
         name: profile.name,
@@ -589,7 +580,7 @@ function App() {
       };
       setMetadata(loadedMetadata);
 
-      const historyRes = await fetch(`${API_URL}/api/user/${encodeURIComponent(loginEmail)}/assessments`);
+      const historyRes = await fetch(`${API_URL}/api/user/${encodeURIComponent(email)}/assessments`);
       const historyData = historyRes.ok ? await historyRes.json() : { assessments: [] };
       const latest = historyData.assessments?.[0];
 
@@ -604,11 +595,96 @@ function App() {
         setResponses([]);
         setSliderValue(3);
       }
+      return 'ok';
     } catch (err) {
       console.error('❌ Login failed:', err);
-      setLoginError('Could not reach server. Please try again.');
+      return 'error';
     }
+  };
+
+  /* ── Returning user: look up their profile and pick up where they left off ── */
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginEmail) return;
+    setLoginLoading(true);
+    setLoginError(null);
+    const result = await loginByEmail(loginEmail);
+    if (result === 'notfound') setLoginError('No account found for this email. Try signing up instead.');
+    else if (result === 'error') setLoginError('Could not reach server. Please try again.');
     setLoginLoading(false);
+  };
+
+  /* ── Lazy-load the Google Identity Services client ── */
+  const ensureGsi = (): Promise<any> =>
+    new Promise((resolve, reject) => {
+      const w = window as any;
+      if (w.google?.accounts?.oauth2) return resolve(w.google);
+      const done = () => (w.google?.accounts?.oauth2 ? resolve(w.google) : reject(new Error('GSI unavailable')));
+      const existing = document.getElementById('gsi-client') as HTMLScriptElement | null;
+      if (existing) {
+        existing.addEventListener('load', done);
+        existing.addEventListener('error', () => reject(new Error('GSI failed to load')));
+        return;
+      }
+      const s = document.createElement('script');
+      s.id = 'gsi-client';
+      s.src = 'https://accounts.google.com/gsi/client';
+      s.async = true;
+      s.defer = true;
+      s.onload = done;
+      s.onerror = () => reject(new Error('GSI failed to load'));
+      document.head.appendChild(s);
+    });
+
+  /* ── Continue with Google: authenticate, then resume or pre-fill sign-up ── */
+  const handleGoogleAuth = async () => {
+    if (!GOOGLE_CLIENT_ID) {
+      setLoginError('Google sign-in is not configured yet. Set VITE_GOOGLE_CLIENT_ID to enable it.');
+      return;
+    }
+    setLoginError(null);
+    setGoogleLoading(true);
+    try {
+      const google = await ensureGsi();
+      const client = google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: 'openid email profile',
+        callback: async (resp: any) => {
+          try {
+            if (resp.error || !resp.access_token) throw new Error(resp.error || 'No access token');
+            const info = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+              headers: { Authorization: `Bearer ${resp.access_token}` },
+            }).then(r => r.json());
+            const email: string = info.email;
+            const name: string = info.name || '';
+            if (!email) throw new Error('Google did not return an email');
+
+            setMetadata(m => ({ ...m, name: name || m.name, email }));
+            setLoginEmail(email);
+
+            const result = await loginByEmail(email);
+            if (result === 'notfound') {
+              // First time with this Google account — continue to sign-up with details pre-filled
+              setAuthMode('signup');
+              setLoginError(null);
+            } else if (result === 'error') {
+              setLoginError('Could not reach server. Please try again.');
+            }
+          } catch (err) {
+            console.error('❌ Google auth callback failed:', err);
+            setLoginError('Google sign-in failed. Please try again.');
+          } finally {
+            setGoogleLoading(false);
+          }
+        },
+        error_callback: () => setGoogleLoading(false),
+      });
+      client.requestAccessToken();
+    } catch (err) {
+      console.error('❌ Google sign-in failed:', err);
+      setLoginError('Google sign-in could not start. Please try again.');
+      setGoogleLoading(false);
+    }
   };
 
   /* ── Send a single response to the backend (fire-and-forget) ── */
@@ -1095,7 +1171,7 @@ function App() {
         .ip-left > * { position:relative; z-index:1; }
         .ip-cursor-field { position:absolute; inset:0; z-index:0; pointer-events:none; }
         .ip-logo-chip { position:absolute; top:30px; left:52px; z-index:3; display:flex; align-items:center; }
-        .ip-logo-chip img { height:40px; width:auto; display:block; filter:brightness(0) invert(1); opacity:.95; }
+        .ip-logo-chip img { height:42px; width:auto; display:block; filter:drop-shadow(0 2px 10px rgba(0,0,0,.6)); }
         .ip-card-logo { display:none; }
         .ip-eyebrow { font-size:12px; letter-spacing:3px; text-transform:uppercase; color:#5b8def; font-weight:700; margin-bottom:22px; }
         .ip-display { font-family:'Playfair Display',Georgia,serif; font-size:46px; line-height:1.08; font-weight:600; margin-bottom:22px; letter-spacing:-.5px; }
@@ -1113,6 +1189,12 @@ function App() {
         .ip-card-sub { font-size:13px; color:#64748b; margin-bottom:20px; }
         .ip-name-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
         .ip-confid { text-align:center; margin-top:18px; font-size:10px; font-weight:700; letter-spacing:2.5px; color:#94a3b8; text-transform:uppercase; }
+        .ip-google-btn { width:100%; display:flex; align-items:center; justify-content:center; gap:10px; padding:11px 16px; background:#fff; border:1.5px solid #dbe1ea; border-radius:11px; color:#1f2937; font-size:14px; font-weight:600; font-family:inherit; cursor:pointer; transition:all .18s ease; }
+        .ip-google-btn:hover { background:#f8fafc; border-color:#c3ccd9; box-shadow:0 2px 8px rgba(15,30,60,.08); }
+        .ip-google-btn:disabled { opacity:.65; cursor:default; }
+        .ip-or { display:flex; align-items:center; margin:16px 0 2px; }
+        .ip-or span { padding:0 12px; color:#94a3b8; font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; }
+        .ip-or::before, .ip-or::after { content:''; height:1px; flex:1; background:#e6eef8; }
 
         @media (max-width: 900px) {
           .ip-left { display:none; }
@@ -1183,6 +1265,25 @@ function App() {
                 }}
               >Log In</button>
             </div>
+
+            {/* ── Continue with Google ── */}
+            <button type="button" onClick={handleGoogleAuth} disabled={googleLoading} className="ip-google-btn">
+              <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+              </svg>
+              {googleLoading ? 'Connecting…' : 'Continue with Google'}
+            </button>
+
+            {loginError && (
+              <div style={{ marginTop: 12, fontSize: 12, color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 10px' }}>
+                {loginError}
+              </div>
+            )}
+
+            <div className="ip-or"><span>or</span></div>
 
           {authMode === 'signup' && (
           <form onSubmit={handleRegisterAndStart} className="ip-form-gap" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -1348,12 +1449,6 @@ function App() {
                   onChange={e => setLoginEmail(e.target.value)} required className="ip-field" />
               </div>
             </div>
-
-            {loginError && (
-              <div style={{ fontSize: 12, color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 10px' }}>
-                {loginError}
-              </div>
-            )}
 
             <button type="submit" disabled={loginLoading} className="ip-btn" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, opacity: loginLoading ? 0.7 : 1 }}>
               {loginLoading ? 'Logging in…' : 'Log In'}
