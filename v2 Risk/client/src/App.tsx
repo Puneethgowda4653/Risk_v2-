@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { generateUniqueAssessment, calculateRiskScore, getBenchmarkData, DOMAINS } from './utils/riskEngine';
 // @ts-ignore
 import { generatePDF } from './utils/pdfGenerator';
+import CursorField from './CursorField';
 import './index.css';
 
 const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:3001' : window.location.origin);
@@ -1103,6 +1104,7 @@ function App() {
           background: radial-gradient(1100px 560px at 12% -10%, rgba(37,99,235,.22), transparent 60%), linear-gradient(160deg,#0b1220 0%,#0f1e3c 55%,#0a1526 100%); }
         .ip-left::after { content:''; position:absolute; inset:0; background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px); background-size:44px 44px; -webkit-mask-image:radial-gradient(circle at 28% 42%,#000,transparent 78%); mask-image:radial-gradient(circle at 28% 42%,#000,transparent 78%); pointer-events:none; }
         .ip-left > * { position:relative; z-index:1; }
+        .ip-cursor-field { position:absolute; inset:0; z-index:0; pointer-events:none; }
         .ip-eyebrow { font-size:12px; letter-spacing:3px; text-transform:uppercase; color:#5b8def; font-weight:700; margin-bottom:22px; }
         .ip-display { font-family:'Playfair Display',Georgia,serif; font-size:46px; line-height:1.08; font-weight:600; margin-bottom:22px; letter-spacing:-.5px; }
         .ip-lede { font-size:15px; line-height:1.7; color:#9fb0d0; max-width:430px; margin-bottom:44px; }
@@ -1151,6 +1153,7 @@ function App() {
 
         {/* ── Left marketing panel ── */}
         <div className="ip-left">
+          <CursorField className="ip-cursor-field" />
           <div className="ip-eyebrow">Enterprise Risk Assessment</div>
           <h1 className="ip-display">Know your risk<br />before it finds you.</h1>
           <p className="ip-lede">
