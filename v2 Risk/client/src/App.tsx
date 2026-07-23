@@ -1087,17 +1087,6 @@ function App() {
         .ip-toggle-box:hover { border-color:#93c5fd; background:#f8fbff; }
         .ip-checkbox { accent-color:#2563eb; }
 
-        /* top bar */
-        .ip-topbar { display:flex; align-items:center; justify-content:space-between; padding:14px 30px; background:#0b1220; border-bottom:1px solid rgba(255,255,255,.07); flex-shrink:0; position:relative; z-index:5; }
-        .ip-brand { display:flex; align-items:center; gap:13px; }
-        .ip-brand-logo-box { background:#fff; border-radius:9px; padding:5px 9px; display:flex; align-items:center; }
-        .ip-brand-logo { height:26px; width:auto; object-fit:contain; }
-        .ip-brand-name { font-size:14px; font-weight:800; letter-spacing:.5px; color:#fff; line-height:1.2; }
-        .ip-brand-sub { font-size:9px; font-weight:600; letter-spacing:2.4px; color:#64769c; text-transform:uppercase; margin-top:2px; }
-        .ip-live { display:flex; align-items:center; gap:9px; font-size:11px; font-weight:700; letter-spacing:1.6px; color:#6ee7b7; text-transform:uppercase; }
-        .ip-live-dot { width:8px; height:8px; border-radius:50%; background:#22c55e; animation:ipLivePulse 1.8s infinite; }
-        @keyframes ipLivePulse { 0%{ box-shadow:0 0 0 0 rgba(34,197,94,.55);} 70%{ box-shadow:0 0 0 7px rgba(34,197,94,0);} 100%{ box-shadow:0 0 0 0 rgba(34,197,94,0);} }
-
         /* split layout */
         .ip-split { flex:1; display:flex; min-height:0; }
         .ip-left { width:40%; max-width:600px; padding:56px 52px; display:flex; flex-direction:column; justify-content:center; position:relative; overflow:hidden; color:#fff;
@@ -1127,26 +1116,10 @@ function App() {
           .ip-right { padding:26px 16px; }
         }
         @media (max-width: 560px) {
-          .ip-topbar { padding:12px 16px; }
-          .ip-brand-sub { display:none; }
           .ip-card { padding:24px 20px; }
           .ip-name-grid { grid-template-columns:1fr; }
         }
       `}</style>
-
-      {/* ── Top bar ── */}
-      <div className="ip-topbar">
-        <div className="ip-brand">
-          <div className="ip-brand-logo-box">
-            <img src="/infopace-logo-300x128.webp" alt="Infopace" className="ip-brand-logo" />
-          </div>
-          <div>
-            <div className="ip-brand-name">INFOPACE MANAGEMENT PVT LTD</div>
-            <div className="ip-brand-sub">Enterprise Risk Assessment</div>
-          </div>
-        </div>
-        <div className="ip-live"><span className="ip-live-dot" />Live Analysis</div>
-      </div>
 
       {/* ── Split panels ── */}
       <div className="ip-split">
