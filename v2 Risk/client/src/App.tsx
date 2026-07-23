@@ -4,10 +4,10 @@ import { generateUniqueAssessment, calculateRiskScore, getBenchmarkData, DOMAINS
 // @ts-ignore
 import { generatePDF } from './utils/pdfGenerator';
 import CursorField from './CursorField';
+import { supabase } from './supabaseClient';
 import './index.css';
 
 const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:3001' : window.location.origin);
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 type Step = 'onboarding' | 'assessment' | 'results' | 'retest';
 type BusinessStage = 'pre-seed' | 'seed' | 'series-a' | 'series-b' | 'series-c+';
@@ -614,78 +614,50 @@ function App() {
     setLoginLoading(false);
   };
 
-  /* ── Lazy-load the Google Identity Services client ── */
-  const ensureGsi = (): Promise<any> =>
-    new Promise((resolve, reject) => {
-      const w = window as any;
-      if (w.google?.accounts?.oauth2) return resolve(w.google);
-      const done = () => (w.google?.accounts?.oauth2 ? resolve(w.google) : reject(new Error('GSI unavailable')));
-      const existing = document.getElementById('gsi-client') as HTMLScriptElement | null;
-      if (existing) {
-        existing.addEventListener('load', done);
-        existing.addEventListener('error', () => reject(new Error('GSI failed to load')));
-        return;
-      }
-      const s = document.createElement('script');
-      s.id = 'gsi-client';
-      s.src = 'https://accounts.google.com/gsi/client';
-      s.async = true;
-      s.defer = true;
-      s.onload = done;
-      s.onerror = () => reject(new Error('GSI failed to load'));
-      document.head.appendChild(s);
-    });
-
-  /* ── Continue with Google: authenticate, then resume or pre-fill sign-up ── */
+  /* ── Continue with Google via Supabase Auth (redirects to Google) ── */
   const handleGoogleAuth = async () => {
-    if (!GOOGLE_CLIENT_ID) {
-      setLoginError('Google sign-in is not configured yet. Set VITE_GOOGLE_CLIENT_ID to enable it.');
+    if (!supabase) {
+      setLoginError('Google sign-in is not configured yet. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY, and enable Google under Supabase → Authentication → Providers.');
       return;
     }
     setLoginError(null);
     setGoogleLoading(true);
-    try {
-      const google = await ensureGsi();
-      const client = google.accounts.oauth2.initTokenClient({
-        client_id: GOOGLE_CLIENT_ID,
-        scope: 'openid email profile',
-        callback: async (resp: any) => {
-          try {
-            if (resp.error || !resp.access_token) throw new Error(resp.error || 'No access token');
-            const info = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-              headers: { Authorization: `Bearer ${resp.access_token}` },
-            }).then(r => r.json());
-            const email: string = info.email;
-            const name: string = info.name || '';
-            if (!email) throw new Error('Google did not return an email');
-
-            setMetadata(m => ({ ...m, name: name || m.name, email }));
-            setLoginEmail(email);
-
-            const result = await loginByEmail(email);
-            if (result === 'notfound') {
-              // First time with this Google account — continue to sign-up with details pre-filled
-              setAuthMode('signup');
-              setLoginError(null);
-            } else if (result === 'error') {
-              setLoginError('Could not reach server. Please try again.');
-            }
-          } catch (err) {
-            console.error('❌ Google auth callback failed:', err);
-            setLoginError('Google sign-in failed. Please try again.');
-          } finally {
-            setGoogleLoading(false);
-          }
-        },
-        error_callback: () => setGoogleLoading(false),
-      });
-      client.requestAccessToken();
-    } catch (err) {
-      console.error('❌ Google sign-in failed:', err);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) {
+      console.error('❌ Google sign-in failed:', error);
       setLoginError('Google sign-in could not start. Please try again.');
       setGoogleLoading(false);
     }
+    // On success the browser redirects to Google; the return is handled on load.
   };
+
+  /* ── Finish a Google sign-in after Supabase redirects back with a session ── */
+  useEffect(() => {
+    if (!supabase) return;
+    const returning = window.location.hash.includes('access_token') || window.location.search.includes('code=');
+    let active = true;
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      const user = data.session?.user;
+      if (!active || !user?.email) return;
+      const email = user.email;
+      const name: string = user.user_metadata?.full_name || user.user_metadata?.name || '';
+      setGoogleLoading(true);
+      setMetadata(m => ({ ...m, name: name || m.name, email }));
+      setLoginEmail(email);
+      const result = await loginByEmail(email);
+      if (!active) return;
+      if (result === 'notfound') { setAuthMode('signup'); setLoginError(null); }
+      else if (result === 'error') { setLoginError('Could not reach server. Please try again.'); }
+      setGoogleLoading(false);
+      if (returning) window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+    })();
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ── Send a single response to the backend (fire-and-forget) ── */
   const sendResponseToServer = (domainId: string, questionIndex: number, value: number) => {
