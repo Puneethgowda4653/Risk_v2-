@@ -1151,15 +1151,15 @@ function App() {
       {/* ── Redesign styles ── */}
       <style>{`
         /* white inputs to match the reference card */
-        .ip-field { width:100%; padding:12px 14px 12px 40px; background:#fff; border:1.5px solid #e2e8f0; border-radius:10px; color:#1e293b; font-size:13px; font-family:inherit; font-weight:500; outline:none; transition:all .2s ease; }
+        .ip-field { width:100%; padding:10px 14px 10px 40px; background:#fff; border:1.5px solid #e2e8f0; border-radius:10px; color:#1e293b; font-size:13px; font-family:inherit; font-weight:500; outline:none; transition:all .2s ease; }
         .ip-field:focus { border-color:#2563eb; background:#fff; box-shadow:0 0 0 3px rgba(37,99,235,.12); }
         .ip-field::placeholder { color:#94a3b8; font-weight:400; }
-        .ip-select { width:100%; padding:12px 14px 12px 36px; background:#fff; border:1.5px solid #e2e8f0; border-radius:10px; color:#1e293b; font-size:12px; font-family:inherit; font-weight:500; outline:none; transition:all .2s ease; appearance:none; -webkit-appearance:none; cursor:pointer; }
+        .ip-select { width:100%; padding:10px 14px 10px 36px; background:#fff; border:1.5px solid #e2e8f0; border-radius:10px; color:#1e293b; font-size:12px; font-family:inherit; font-weight:500; outline:none; transition:all .2s ease; appearance:none; -webkit-appearance:none; cursor:pointer; }
         .ip-select:focus { border-color:#2563eb; background:#fff; box-shadow:0 0 0 3px rgba(37,99,235,.12); }
-        .ip-btn { width:100%; padding:13px 24px; background:linear-gradient(135deg,#1e3a8a 0%,#2563eb 55%,#3b82f6 100%); border:none; border-radius:11px; color:#fff; font-size:14px; font-weight:700; font-family:inherit; cursor:pointer; transition:all .25s ease; box-shadow:0 8px 20px rgba(37,99,235,.28); position:relative; overflow:hidden; letter-spacing:.3px; }
+        .ip-btn { width:100%; padding:11px 24px; background:linear-gradient(135deg,#1e3a8a 0%,#2563eb 55%,#3b82f6 100%); border:none; border-radius:11px; color:#fff; font-size:14px; font-weight:700; font-family:inherit; cursor:pointer; transition:all .25s ease; box-shadow:0 8px 20px rgba(37,99,235,.28); position:relative; overflow:hidden; letter-spacing:.3px; }
         .ip-btn:hover { transform:translateY(-2px); box-shadow:0 12px 28px rgba(37,99,235,.36); background:linear-gradient(135deg,#1e3a8a 0%,#2563eb 55%,#3b82f6 100%); }
         .ip-btn:active { transform:translateY(0) scale(.99); }
-        .ip-toggle-box { display:flex; align-items:center; gap:8px; padding:10px 12px; background:#fff; border:1.5px solid #e2e8f0; border-radius:10px; cursor:pointer; transition:all .2s ease; flex:1; }
+        .ip-toggle-box { display:flex; align-items:center; gap:8px; padding:8px 12px; background:#fff; border:1.5px solid #e2e8f0; border-radius:10px; cursor:pointer; transition:all .2s ease; flex:1; }
         .ip-toggle-box:hover { border-color:#93c5fd; background:#f8fbff; }
         .ip-checkbox { accent-color:#2563eb; }
 
@@ -1182,17 +1182,17 @@ function App() {
         .ip-copyright { position:absolute; bottom:24px; left:52px; font-size:11px; color:#5a6c93; z-index:1; }
 
         /* right / form */
-        .ip-right { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding:44px 32px; overflow:auto;
+        .ip-right { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding:26px 32px; overflow:auto;
           background:#eef4fb; background-image:linear-gradient(rgba(37,99,235,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(37,99,235,.05) 1px,transparent 1px); background-size:34px 34px; }
-        .ip-card { width:100%; max-width:520px; background:#fff; border:1px solid #e6eef8; border-radius:18px; padding:34px 34px 26px; box-shadow:0 24px 60px rgba(15,30,60,.12); animation:ipFadeIn .5s ease; }
-        .ip-card-h1 { font-size:26px; font-weight:800; color:#0f172a; letter-spacing:-.4px; margin-bottom:5px; }
-        .ip-card-sub { font-size:13px; color:#64748b; margin-bottom:20px; }
+        .ip-card { width:100%; max-width:520px; background:#fff; border:1px solid #e6eef8; border-radius:18px; padding:26px 30px 20px; box-shadow:0 24px 60px rgba(15,30,60,.12); animation:ipFadeIn .5s ease; }
+        .ip-card-h1 { font-size:23px; font-weight:800; color:#0f172a; letter-spacing:-.4px; margin-bottom:3px; }
+        .ip-card-sub { font-size:13px; color:#64748b; margin-bottom:14px; }
         .ip-name-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-        .ip-confid { text-align:center; margin-top:18px; font-size:10px; font-weight:700; letter-spacing:2.5px; color:#94a3b8; text-transform:uppercase; }
-        .ip-google-btn { width:100%; display:flex; align-items:center; justify-content:center; gap:10px; padding:11px 16px; background:#fff; border:1.5px solid #dbe1ea; border-radius:11px; color:#1f2937; font-size:14px; font-weight:600; font-family:inherit; cursor:pointer; transition:all .18s ease; }
+        .ip-confid { text-align:center; margin-top:12px; font-size:10px; font-weight:700; letter-spacing:2.5px; color:#94a3b8; text-transform:uppercase; }
+        .ip-google-btn { width:100%; display:flex; align-items:center; justify-content:center; gap:10px; padding:9px 16px; background:#fff; border:1.5px solid #dbe1ea; border-radius:11px; color:#1f2937; font-size:14px; font-weight:600; font-family:inherit; cursor:pointer; transition:all .18s ease; }
         .ip-google-btn:hover { background:#f8fafc; border-color:#c3ccd9; box-shadow:0 2px 8px rgba(15,30,60,.08); }
         .ip-google-btn:disabled { opacity:.65; cursor:default; }
-        .ip-or { display:flex; align-items:center; margin:16px 0 2px; }
+        .ip-or { display:flex; align-items:center; margin:10px 0 0; }
         .ip-or span { padding:0 12px; color:#94a3b8; font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; }
         .ip-or::before, .ip-or::after { content:''; height:1px; flex:1; background:#e6eef8; }
 
@@ -1241,7 +1241,7 @@ function App() {
             <p className="ip-card-sub">{authMode === 'signup' ? 'Stored securely. Never shared.' : 'Enter your email to continue.'}</p>
 
             {/* ── Sign Up / Log In toggle ── */}
-            <div style={{ display: 'flex', gap: 6, marginBottom: 18, background: '#eef2f7', borderRadius: 11, padding: 4 }}>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 12, background: '#eef2f7', borderRadius: 11, padding: 4 }}>
               <button
                 type="button"
                 onClick={() => { setAuthMode('signup'); setLoginError(null); }}
@@ -1278,7 +1278,7 @@ function App() {
             </button>
 
             {loginError && (
-              <div style={{ marginTop: 12, fontSize: 12, color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 10px' }}>
+              <div style={{ marginTop: 10, fontSize: 11.5, color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '6px 10px', lineHeight: 1.35 }}>
                 {loginError}
               </div>
             )}
@@ -1286,7 +1286,7 @@ function App() {
             <div className="ip-or"><span>or</span></div>
 
           {authMode === 'signup' && (
-          <form onSubmit={handleRegisterAndStart} className="ip-form-gap" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <form onSubmit={handleRegisterAndStart} className="ip-form-gap" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
             {/* ── Full Name + Company (two-up, like the reference) ── */}
             <div className="ip-name-grid">
@@ -1403,12 +1403,12 @@ function App() {
             {/* ── Consent & Agreement ── */}
             <div className="ip-consent-box" style={{
               background: '#f0f9ff', border: '1.5px solid #e0f2fe', borderRadius: 8,
-              padding: '10px 12px',
+              padding: '8px 12px',
             }}>
-              <p style={{ fontSize: 9, fontWeight: 700, color: '#0e7490', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
+              <p style={{ fontSize: 9, fontWeight: 700, color: '#0e7490', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>
                 Consent & Agreement
               </p>
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 7, cursor: 'pointer', marginBottom: 6 }}>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 7, cursor: 'pointer', marginBottom: 5 }}>
                 <input type="checkbox" required className="ip-checkbox" style={{ marginTop: 2 }} />
                 <span style={{ fontSize: 11, color: '#475569', lineHeight: 1.4 }}>
                   I agree to the <span style={{ fontWeight: 600, color: '#0891b2' }}>Privacy Policy</span> and understand how my data will be processed
@@ -1433,7 +1433,7 @@ function App() {
           )}
 
           {authMode === 'login' && (
-          <form onSubmit={handleLogin} className="ip-form-gap" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <form onSubmit={handleLogin} className="ip-form-gap" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div>
               <label className="ip-field-label" style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
                 Email Address
