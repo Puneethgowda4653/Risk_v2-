@@ -1171,7 +1171,7 @@ function App() {
         .ip-left > * { position:relative; z-index:1; }
         .ip-cursor-field { position:absolute; inset:0; z-index:0; pointer-events:none; }
         .ip-logo-chip { position:absolute; top:30px; left:52px; z-index:3; display:flex; align-items:center; }
-        .ip-logo-chip img { height:42px; width:auto; display:block; filter:drop-shadow(0 2px 10px rgba(0,0,0,.6)); }
+        .ip-logo-chip img { height:54px; width:auto; display:block; filter:drop-shadow(0 2px 10px rgba(0,0,0,.6)); }
         .ip-card-logo { display:none; }
         .ip-eyebrow { font-size:12px; letter-spacing:3px; text-transform:uppercase; color:#5b8def; font-weight:700; margin-bottom:22px; }
         .ip-display { font-family:'Playfair Display',Georgia,serif; font-size:46px; line-height:1.08; font-weight:600; margin-bottom:22px; letter-spacing:-.5px; }
@@ -1182,7 +1182,7 @@ function App() {
         .ip-copyright { position:absolute; bottom:24px; left:52px; font-size:11px; color:#5a6c93; z-index:1; }
 
         /* right / form */
-        .ip-right { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:36px 32px; overflow:auto;
+        .ip-right { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding:44px 32px; overflow:auto;
           background:#eef4fb; background-image:linear-gradient(rgba(37,99,235,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(37,99,235,.05) 1px,transparent 1px); background-size:34px 34px; }
         .ip-card { width:100%; max-width:520px; background:#fff; border:1px solid #e6eef8; border-radius:18px; padding:34px 34px 26px; box-shadow:0 24px 60px rgba(15,30,60,.12); animation:ipFadeIn .5s ease; }
         .ip-card-h1 { font-size:26px; font-weight:800; color:#0f172a; letter-spacing:-.4px; margin-bottom:5px; }
@@ -1200,7 +1200,7 @@ function App() {
           .ip-left { display:none; }
           .ip-right { padding:26px 16px; }
           .ip-card-logo { display:flex; justify-content:center; margin-bottom:18px; }
-          .ip-card-logo img { height:34px; width:auto; }
+          .ip-card-logo img { height:44px; width:auto; }
         }
         @media (max-width: 560px) {
           .ip-card { padding:24px 20px; }
