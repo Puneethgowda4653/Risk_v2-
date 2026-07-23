@@ -1094,6 +1094,9 @@ function App() {
         .ip-left::after { content:''; position:absolute; inset:0; background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px); background-size:44px 44px; -webkit-mask-image:radial-gradient(circle at 28% 42%,#000,transparent 78%); mask-image:radial-gradient(circle at 28% 42%,#000,transparent 78%); pointer-events:none; }
         .ip-left > * { position:relative; z-index:1; }
         .ip-cursor-field { position:absolute; inset:0; z-index:0; pointer-events:none; }
+        .ip-logo-chip { position:absolute; top:26px; left:52px; z-index:3; background:#fff; border-radius:12px; padding:9px 15px; box-shadow:0 10px 26px rgba(2,8,23,.35); display:flex; align-items:center; }
+        .ip-logo-chip img { height:34px; width:auto; display:block; }
+        .ip-card-logo { display:none; }
         .ip-eyebrow { font-size:12px; letter-spacing:3px; text-transform:uppercase; color:#5b8def; font-weight:700; margin-bottom:22px; }
         .ip-display { font-family:'Playfair Display',Georgia,serif; font-size:46px; line-height:1.08; font-weight:600; margin-bottom:22px; letter-spacing:-.5px; }
         .ip-lede { font-size:15px; line-height:1.7; color:#9fb0d0; max-width:430px; margin-bottom:44px; }
@@ -1114,6 +1117,8 @@ function App() {
         @media (max-width: 900px) {
           .ip-left { display:none; }
           .ip-right { padding:26px 16px; }
+          .ip-card-logo { display:flex; justify-content:center; margin-bottom:18px; }
+          .ip-card-logo img { height:34px; width:auto; }
         }
         @media (max-width: 560px) {
           .ip-card { padding:24px 20px; }
@@ -1127,6 +1132,9 @@ function App() {
         {/* ── Left marketing panel ── */}
         <div className="ip-left">
           <CursorField className="ip-cursor-field" />
+          <div className="ip-logo-chip">
+            <img src="/infopace-logo-300x128.webp" alt="Infopace — Commitment to Excellence" />
+          </div>
           <div className="ip-eyebrow">Enterprise Risk Assessment</div>
           <h1 className="ip-display">Know your risk<br />before it finds you.</h1>
           <p className="ip-lede">
@@ -1144,6 +1152,9 @@ function App() {
         {/* ── Right form panel ── */}
         <div className="ip-right">
           <div className="ip-card">
+            <div className="ip-card-logo">
+              <img src="/infopace-logo-300x128.webp" alt="Infopace — Commitment to Excellence" />
+            </div>
             <h2 className="ip-card-h1">{authMode === 'signup' ? 'Personal details' : 'Welcome back'}</h2>
             <p className="ip-card-sub">{authMode === 'signup' ? 'Stored securely. Never shared.' : 'Enter your email to continue.'}</p>
 
