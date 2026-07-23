@@ -923,15 +923,15 @@ function App() {
 
   /* ── ONBOARDING ── */
   if (step === 'onboarding') return (
-    <div className="ip-page" style={{
-      height: '100vh',
+    <div className="ip-shell" style={{
+      minHeight: '100vh',
       display: 'flex',
       flexDirection: 'column',
       fontFamily: "'DM Sans', system-ui, sans-serif",
-      overflow: 'hidden',
-      background: 'linear-gradient(180deg, #d4eaf7 0%, #e2f0fa 25%, #eef6fc 50%, #f4faff 75%, #ffffff 100%)',
+      background: '#0b1220',
       position: 'relative',
     }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&display=swap');`}</style>
       <style>{`
         @keyframes gravityFloat1 {
           0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
@@ -965,12 +965,7 @@ function App() {
         .gravity-orb-4 { position: absolute; width: 200px; height: 200px; border-radius: 50%; background: radial-gradient(circle, rgba(245,158,11,0.08) 0%, transparent 70%); animation: gravityFloat1 25s linear infinite 5s; pointer-events: none; z-index: 0; }
         .gravity-bg { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
       `}</style>
-      <div className="gravity-bg">
-        <div className="gravity-orb-1" style={{ left: '10%', top: 0 }} />
-        <div className="gravity-orb-2" style={{ left: '60%', top: 0 }} />
-        <div className="gravity-orb-3" style={{ left: '35%', top: 0 }} />
-        <div className="gravity-orb-4" style={{ left: '80%', top: 0 }} />
-      </div>
+      {/* clean split-panel background */}
       <style>{SHARED_STYLES + `
         @keyframes ipFadeIn { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:none; } }
         @keyframes ipPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(14,165,233,.18); } 50% { box-shadow: 0 0 0 10px rgba(14,165,233,0); } }
@@ -1076,85 +1071,137 @@ function App() {
         }
       `}</style>
 
-      {/* ── Main Content Area ── */}
-      <div className="ip-main-content" style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'safe center',
-        padding: '24px 24px 12px',
-        overflow: 'auto',
-      }}>
+      {/* ── Redesign styles ── */}
+      <style>{`
+        /* white inputs to match the reference card */
+        .ip-field { width:100%; padding:12px 14px 12px 40px; background:#fff; border:1.5px solid #e2e8f0; border-radius:10px; color:#1e293b; font-size:13px; font-family:inherit; font-weight:500; outline:none; transition:all .2s ease; }
+        .ip-field:focus { border-color:#2563eb; background:#fff; box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+        .ip-field::placeholder { color:#94a3b8; font-weight:400; }
+        .ip-select { width:100%; padding:12px 14px 12px 36px; background:#fff; border:1.5px solid #e2e8f0; border-radius:10px; color:#1e293b; font-size:12px; font-family:inherit; font-weight:500; outline:none; transition:all .2s ease; appearance:none; -webkit-appearance:none; cursor:pointer; }
+        .ip-select:focus { border-color:#2563eb; background:#fff; box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+        .ip-btn { width:100%; padding:13px 24px; background:linear-gradient(135deg,#1e3a8a 0%,#2563eb 55%,#3b82f6 100%); border:none; border-radius:11px; color:#fff; font-size:14px; font-weight:700; font-family:inherit; cursor:pointer; transition:all .25s ease; box-shadow:0 8px 20px rgba(37,99,235,.28); position:relative; overflow:hidden; letter-spacing:.3px; }
+        .ip-btn:hover { transform:translateY(-2px); box-shadow:0 12px 28px rgba(37,99,235,.36); background:linear-gradient(135deg,#1e3a8a 0%,#2563eb 55%,#3b82f6 100%); }
+        .ip-btn:active { transform:translateY(0) scale(.99); }
+        .ip-toggle-box { display:flex; align-items:center; gap:8px; padding:10px 12px; background:#fff; border:1.5px solid #e2e8f0; border-radius:10px; cursor:pointer; transition:all .2s ease; flex:1; }
+        .ip-toggle-box:hover { border-color:#93c5fd; background:#f8fbff; }
+        .ip-checkbox { accent-color:#2563eb; }
 
-        {/* ── Logo ── */}
-        <div className="ip-logo-area" style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          marginBottom: 24,
-          animation: 'ipFadeIn .5s ease',
-          flexShrink: 0,
-        }}>
-          <img
-            src="/infopace-logo-300x128.webp"
-            alt="Infopace Logo"
-            className="ip-logo-img"
-            style={{
-              height: 85,
-              width: 'auto',
-              objectFit: 'contain',
-              filter: 'drop-shadow(0 2px 8px rgba(14,165,233,.15))',
-            }}
-          />
+        /* top bar */
+        .ip-topbar { display:flex; align-items:center; justify-content:space-between; padding:14px 30px; background:#0b1220; border-bottom:1px solid rgba(255,255,255,.07); flex-shrink:0; position:relative; z-index:5; }
+        .ip-brand { display:flex; align-items:center; gap:13px; }
+        .ip-brand-logo-box { background:#fff; border-radius:9px; padding:5px 9px; display:flex; align-items:center; }
+        .ip-brand-logo { height:26px; width:auto; object-fit:contain; }
+        .ip-brand-name { font-size:14px; font-weight:800; letter-spacing:.5px; color:#fff; line-height:1.2; }
+        .ip-brand-sub { font-size:9px; font-weight:600; letter-spacing:2.4px; color:#64769c; text-transform:uppercase; margin-top:2px; }
+        .ip-live { display:flex; align-items:center; gap:9px; font-size:11px; font-weight:700; letter-spacing:1.6px; color:#6ee7b7; text-transform:uppercase; }
+        .ip-live-dot { width:8px; height:8px; border-radius:50%; background:#22c55e; animation:ipLivePulse 1.8s infinite; }
+        @keyframes ipLivePulse { 0%{ box-shadow:0 0 0 0 rgba(34,197,94,.55);} 70%{ box-shadow:0 0 0 7px rgba(34,197,94,0);} 100%{ box-shadow:0 0 0 0 rgba(34,197,94,0);} }
+
+        /* split layout */
+        .ip-split { flex:1; display:flex; min-height:0; }
+        .ip-left { width:40%; max-width:600px; padding:56px 52px; display:flex; flex-direction:column; justify-content:center; position:relative; overflow:hidden; color:#fff;
+          background: radial-gradient(1100px 560px at 12% -10%, rgba(37,99,235,.22), transparent 60%), linear-gradient(160deg,#0b1220 0%,#0f1e3c 55%,#0a1526 100%); }
+        .ip-left::after { content:''; position:absolute; inset:0; background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px); background-size:44px 44px; -webkit-mask-image:radial-gradient(circle at 28% 42%,#000,transparent 78%); mask-image:radial-gradient(circle at 28% 42%,#000,transparent 78%); pointer-events:none; }
+        .ip-left > * { position:relative; z-index:1; }
+        .ip-eyebrow { font-size:12px; letter-spacing:3px; text-transform:uppercase; color:#5b8def; font-weight:700; margin-bottom:22px; }
+        .ip-display { font-family:'Playfair Display',Georgia,serif; font-size:46px; line-height:1.08; font-weight:600; margin-bottom:22px; letter-spacing:-.5px; }
+        .ip-lede { font-size:15px; line-height:1.7; color:#9fb0d0; max-width:430px; margin-bottom:44px; }
+        .ip-stats { display:flex; flex-direction:column; gap:24px; }
+        .ip-stat-num { font-size:34px; font-weight:800; color:#fff; letter-spacing:-1px; line-height:1; }
+        .ip-stat-label { font-size:13px; color:#8296bd; margin-top:6px; }
+        .ip-copyright { position:absolute; bottom:24px; left:52px; font-size:11px; color:#5a6c93; z-index:1; }
+
+        /* right / form */
+        .ip-right { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:36px 32px; overflow:auto;
+          background:#eef4fb; background-image:linear-gradient(rgba(37,99,235,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(37,99,235,.05) 1px,transparent 1px); background-size:34px 34px; }
+        .ip-card { width:100%; max-width:520px; background:#fff; border:1px solid #e6eef8; border-radius:18px; padding:34px 34px 26px; box-shadow:0 24px 60px rgba(15,30,60,.12); animation:ipFadeIn .5s ease; }
+        .ip-card-h1 { font-size:26px; font-weight:800; color:#0f172a; letter-spacing:-.4px; margin-bottom:5px; }
+        .ip-card-sub { font-size:13px; color:#64748b; margin-bottom:20px; }
+        .ip-name-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+        .ip-confid { text-align:center; margin-top:18px; font-size:10px; font-weight:700; letter-spacing:2.5px; color:#94a3b8; text-transform:uppercase; }
+
+        @media (max-width: 900px) {
+          .ip-left { display:none; }
+          .ip-right { padding:26px 16px; }
+        }
+        @media (max-width: 560px) {
+          .ip-topbar { padding:12px 16px; }
+          .ip-brand-sub { display:none; }
+          .ip-card { padding:24px 20px; }
+          .ip-name-grid { grid-template-columns:1fr; }
+        }
+      `}</style>
+
+      {/* ── Top bar ── */}
+      <div className="ip-topbar">
+        <div className="ip-brand">
+          <div className="ip-brand-logo-box">
+            <img src="/infopace-logo-300x128.webp" alt="Infopace" className="ip-brand-logo" />
+          </div>
+          <div>
+            <div className="ip-brand-name">INFOPACE MANAGEMENT PVT LTD</div>
+            <div className="ip-brand-sub">Enterprise Risk Assessment</div>
+          </div>
+        </div>
+        <div className="ip-live"><span className="ip-live-dot" />Live Analysis</div>
+      </div>
+
+      {/* ── Split panels ── */}
+      <div className="ip-split">
+
+        {/* ── Left marketing panel ── */}
+        <div className="ip-left">
+          <div className="ip-eyebrow">Enterprise Risk Assessment</div>
+          <h1 className="ip-display">Know your risk<br />before it finds you.</h1>
+          <p className="ip-lede">
+            Our engine maps your business stage, vertical, and model — then surfaces a
+            personalised vulnerability brief within minutes.
+          </p>
+          <div className="ip-stats">
+            <div><div className="ip-stat-num">3×</div><div className="ip-stat-label">Faster than a manual risk audit</div></div>
+            <div><div className="ip-stat-num">50+</div><div className="ip-stat-label">Risk signals analysed per assessment</div></div>
+            <div><div className="ip-stat-num">5 mins</div><div className="ip-stat-label">From inputs to a full risk dashboard</div></div>
+          </div>
+          <div className="ip-copyright">© Infopace. Commitment to Excellence.</div>
         </div>
 
-        {/* ── Form Card ── */}
-        <div style={{
-          width: '100%', maxWidth: 440,
-          animation: 'ipFadeIn .6s ease .1s both',
-          flexShrink: 0,
-        }}>
-          <h1 className="ip-welcome-h1" style={{
-            fontSize: 26, fontWeight: 800, color: '#0f172a',
-            marginBottom: 4, letterSpacing: -0.3,
-          }}>
-            Welcome...
-          </h1>
-          <p className="ip-welcome-sub" style={{
-            fontSize: 1, color: '#64748b', fontWeight: 400,
-            marginBottom: 20,
-          }}>
-            {authMode === 'signup' ? 'Please enter your details to sign in.' : 'Enter your email to continue.'}
-          </p>
+        {/* ── Right form panel ── */}
+        <div className="ip-right">
+          <div className="ip-card">
+            <h2 className="ip-card-h1">{authMode === 'signup' ? 'Personal details' : 'Welcome back'}</h2>
+            <p className="ip-card-sub">{authMode === 'signup' ? 'Stored securely. Never shared.' : 'Enter your email to continue.'}</p>
 
-          {/* ── Sign Up / Log In toggle ── */}
-          <div style={{ display: 'flex', gap: 6, marginBottom: 16, background: '#f1f5f9', borderRadius: 10, padding: 4 }}>
-            <button
-              type="button"
-              onClick={() => { setAuthMode('signup'); setLoginError(null); }}
-              style={{
-                flex: 1, padding: '8px 0', borderRadius: 7, border: 'none', cursor: 'pointer',
-                fontSize: 12, fontWeight: 700, transition: 'all .15s',
-                background: authMode === 'signup' ? 'white' : 'transparent',
-                color: authMode === 'signup' ? '#0f172a' : '#64748b',
-                boxShadow: authMode === 'signup' ? '0 1px 3px rgba(0,0,0,.08)' : 'none',
-              }}
-            >Sign Up</button>
-            <button
-              type="button"
-              onClick={() => { setAuthMode('login'); setLoginError(null); }}
-              style={{
-                flex: 1, padding: '8px 0', borderRadius: 7, border: 'none', cursor: 'pointer',
-                fontSize: 12, fontWeight: 700, transition: 'all .15s',
-                background: authMode === 'login' ? 'white' : 'transparent',
-                color: authMode === 'login' ? '#0f172a' : '#64748b',
-                boxShadow: authMode === 'login' ? '0 1px 3px rgba(0,0,0,.08)' : 'none',
-              }}
-            >Log In</button>
-          </div>
+            {/* ── Sign Up / Log In toggle ── */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 18, background: '#eef2f7', borderRadius: 11, padding: 4 }}>
+              <button
+                type="button"
+                onClick={() => { setAuthMode('signup'); setLoginError(null); }}
+                style={{
+                  flex: 1, padding: '9px 0', borderRadius: 8, border: 'none', cursor: 'pointer',
+                  fontSize: 12, fontWeight: 700, transition: 'all .15s',
+                  background: authMode === 'signup' ? 'white' : 'transparent',
+                  color: authMode === 'signup' ? '#0f172a' : '#64748b',
+                  boxShadow: authMode === 'signup' ? '0 1px 3px rgba(0,0,0,.08)' : 'none',
+                }}
+              >Sign Up</button>
+              <button
+                type="button"
+                onClick={() => { setAuthMode('login'); setLoginError(null); }}
+                style={{
+                  flex: 1, padding: '9px 0', borderRadius: 8, border: 'none', cursor: 'pointer',
+                  fontSize: 12, fontWeight: 700, transition: 'all .15s',
+                  background: authMode === 'login' ? 'white' : 'transparent',
+                  color: authMode === 'login' ? '#0f172a' : '#64748b',
+                  boxShadow: authMode === 'login' ? '0 1px 3px rgba(0,0,0,.08)' : 'none',
+                }}
+              >Log In</button>
+            </div>
 
           {authMode === 'signup' && (
           <form onSubmit={handleRegisterAndStart} className="ip-form-gap" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
+            {/* ── Full Name + Company (two-up, like the reference) ── */}
+            <div className="ip-name-grid">
             {/* ── Full Name ── */}
             <div>
               <label className="ip-field-label" style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
@@ -1187,6 +1234,7 @@ function App() {
                 <input type="text" placeholder="Acme Corporation" value={metadata.companyName}
                   onChange={e => setMetadata({ ...metadata, companyName: e.target.value })} required className="ip-field" />
               </div>
+            </div>
             </div>
 
             {/* ── Email Address ── */}
@@ -1331,31 +1379,9 @@ function App() {
           </form>
           )}
 
-          {/* ── Security Notice ── */}
-          <div className="ip-security-notice" style={{
-            textAlign: 'center', marginTop: 14, paddingTop: 10,
-            borderTop: '1px solid rgba(14,165,233,.1)',
-          }}>
-            <p style={{ fontSize: 8, fontWeight: 700, color: '#94a3b8', letterSpacing: 2, textTransform: 'uppercase' }}>
-
-            </p>
+            {/* ── Confidentiality line ── */}
+            <div className="ip-confid">Encrypted · Confidential · Never Sold</div>
           </div>
-        </div>
-      </div>
-
-      {/* ── Footer ── */}
-      <div className="ip-footer" style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        padding: '12px 32px', borderTop: '1px solid rgba(0,0,0,.04)',
-        flexShrink: 0, flexWrap: 'wrap', gap: 8,
-      }}>
-        <div style={{ fontSize: 11, color: '#64748b' }}>
-          © <span style={{ fontWeight: 700, color: '#0891b2' }}>Infopace</span>.{' '}
-          <span style={{ fontStyle: 'italic' }}>Commitment to Excellence.</span>
-        </div>
-        <div style={{ display: 'flex', gap: 20 }}>
-          <span className="ip-footer-link">Privacy Policy</span>
-          <span className="ip-footer-link">Terms of Service</span>
         </div>
       </div>
     </div>
