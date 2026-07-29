@@ -1,0 +1,64 @@
+name: Build and Deploy Frontend
+
+# Rebuilds and publishes the client on every push to main so the live site
+# always reflects the latest code. Also runnable manually from the Actions tab.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one deployment at a time; newer pushes cancel in-progress ones.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: "v2 Risk/client"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: "v2 Risk/client/package-lock.json"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # base is set to the repo name so assets resolve on the project Pages URL
+      # (https://<user>.github.io/Risk_v2-/). If you later point a custom domain
+      # such as risk.infopaceindia.co.in at Pages, change this to --base=/.
+      - name: Build
+        run: npm run build -- --base=/Risk_v2-/
+
+      # Single-page app: serve index.html for unknown routes.
+      - name: SPA fallback
+        run: cp dist/index.html dist/404.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "v2 Risk/client/dist"
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
