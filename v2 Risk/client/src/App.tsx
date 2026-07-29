@@ -5,9 +5,23 @@ import { generateUniqueAssessment, calculateRiskScore, getBenchmarkData, DOMAINS
 import { generatePDF } from './utils/pdfGenerator';
 import CursorField from './CursorField';
 import { supabase } from './supabaseClient';
+import { startRazorpayCheckout, redirectTopLevel } from './utils/razorpayPayment';
 import './index.css';
 
 const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:3001' : window.location.origin);
+
+// Centralized external "Payment Hub" static site that hosts the success/failure
+// landing pages. The top-level window is redirected here after checkout.
+const PAYMENT_HUB_URL = import.meta.env.VITE_PAYMENT_HUB_URL || '';
+
+/** Build a Payment Hub URL carrying the outcome status and payment identifiers. */
+const buildHubUrl = (status: 'success' | 'failure', params: Record<string, string>): string => {
+  const base = PAYMENT_HUB_URL || `${window.location.origin}/payment`;
+  const url = new URL(base);
+  url.searchParams.set('status', status);
+  Object.entries(params).forEach(([k, v]) => { if (v) url.searchParams.set(k, v); });
+  return url.toString();
+};
 
 type Step = 'onboarding' | 'assessment' | 'results' | 'retest';
 type BusinessStage = 'pre-seed' | 'seed' | 'series-a' | 'series-b' | 'series-c+';
@@ -710,59 +724,85 @@ function App() {
     }
   };
 
-  /* ── Download PDF & upload to Supabase ── */
+  /* ── Generate the report PDF and upload it to Supabase; returns its URL ── */
+  const generateAndUploadReport = async (): Promise<string | null> => {
+    if (!result || !metadata) return null;
+    setPdfUploadStatus('generating');
+    // Generate the PDF (this also triggers a local download via doc.save).
+    const { blob, filename } = await generatePDF(result, metadata);
+    console.log('✅ PDF generated locally:', filename);
+
+    setPdfUploadStatus('uploading');
+    const base64: string = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+
+    try {
+      const res = await fetch(`${API_URL}/api/upload-pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: metadata.email, assessmentId: null, pdfBase64: base64, filename }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        console.log('✅ PDF uploaded to Supabase:', data.path, `(${(data.fileSize / 1024).toFixed(1)} KB)`);
+        setPdfUploadStatus('done');
+        return data.url || null;
+      }
+      console.error('❌ PDF upload failed:', data.error);
+      setPdfUploadStatus('error');
+      return null;
+    } catch (uploadErr) {
+      console.error('❌ PDF upload error:', uploadErr);
+      setPdfUploadStatus('error');
+      return null;
+    }
+  };
+
+  /* ── Pay for the report, then hand off to the external Payment Hub ── */
   const handleDownloadPDF = async () => {
     if (!result || !metadata) return;
 
-    // Show early birds popup
-    setShowEarlyBirdsPopup(true);
-
-    // Start PDF generation after a brief delay for popup to display
-    setTimeout(async () => {
-      setPdfUploadStatus('generating');
-      try {
-        // 1. Generate the PDF (this also triggers local download via doc.save)
-        const { blob, filename } = await generatePDF(result, metadata);
-        console.log('✅ PDF generated locally:', filename);
-
-        // 2. Convert blob to base64 for upload
-        setPdfUploadStatus('uploading');
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-          try {
-            const base64 = (reader.result as string).split(',')[1]; // strip data:... prefix
-            const res = await fetch(`${API_URL}/api/upload-pdf`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                email: metadata.email,
-                assessmentId: null, // could pass assessmentId if available
-                pdfBase64: base64,
-                filename,
-              }),
-            });
-            const data = await res.json();
-            if (data.success) {
-              console.log('✅ PDF uploaded to Supabase:', data.path, `(${(data.fileSize / 1024).toFixed(1)} KB)`);
-              setPdfUploadStatus('done');
-            } else {
-              console.error('❌ PDF upload failed:', data.error);
-              setPdfUploadStatus('error');
-            }
-          } catch (uploadErr) {
-            console.error('❌ PDF upload error:', uploadErr);
-            setPdfUploadStatus('error');
-          }
-          // Reset status after 4 seconds
-          setTimeout(() => setPdfUploadStatus('idle'), 4000);
-        };
-        reader.readAsDataURL(blob);
-      } catch (err) {
-        console.error('❌ PDF generation failed:', err);
-        setPdfUploadStatus('error');
-        setTimeout(() => setPdfUploadStatus('idle'), 4000);
-      }
-    }, 500);
+    await startRazorpayCheckout({
+      apiUrl: API_URL,
+      name: metadata.name,
+      email: metadata.email,
+      companyName: metadata.companyName,
+      assessmentId: null,
+      // User closed the modal without paying — stay on the dashboard.
+      onDismiss: () => {
+        setShowEarlyBirdsPopup(false);
+        setPdfUploadStatus('idle');
+      },
+      // Payment failed / could not be started — send the top window to the Hub.
+      onFailure: (reason, meta) => {
+        redirectTopLevel(buildHubUrl('failure', {
+          reason,
+          order_id: meta?.orderId || '',
+          email: metadata.email,
+        }));
+      },
+      // Payment verified server-side — prepare the report, then hand off to the Hub.
+      onSuccess: async (response) => {
+        setShowEarlyBirdsPopup(true); // reuse the "preparing your report" overlay
+        let reportUrl: string | null = null;
+        try {
+          reportUrl = await generateAndUploadReport();
+        } catch (err) {
+          console.error('❌ Report preparation failed after payment:', err);
+        }
+        redirectTopLevel(buildHubUrl('success', {
+          payment_id: response.razorpay_payment_id,
+          order_id: response.razorpay_order_id,
+          signature: response.razorpay_signature,
+          email: metadata.email,
+          report: reportUrl || '',
+        }));
+      },
+    });
   };
 
   /* ── Straight-lining detection ── */

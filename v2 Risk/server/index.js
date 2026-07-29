@@ -1,9 +1,24 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { calculateScore } = require('./scoringEngine');
 const supabase = require('./supabaseClient');
+
+// ── Razorpay config (server-enforced price; never trust the client for amount) ──
+const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID;
+const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
+const RAZORPAY_AMOUNT = parseInt(process.env.RAZORPAY_AMOUNT || '49900', 10); // in paise
+const RAZORPAY_CURRENCY = process.env.RAZORPAY_CURRENCY || 'INR';
+
+// Constant-time compare that tolerates unequal-length inputs.
+function safeEqual(a, b) {
+  const ba = Buffer.from(String(a), 'utf8');
+  const bb = Buffer.from(String(b), 'utf8');
+  if (ba.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ba, bb);
+}
 
 const app = express();
 app.use(cors());
@@ -269,6 +284,72 @@ app.get('/api/user/:email/pdfs', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
   }
+});
+
+// ============ RAZORPAY PAYMENT ENDPOINTS ============
+
+// Create a Razorpay order. The amount is fixed on the server so the client
+// cannot tamper with the price. Returns the public key_id so the frontend can
+// open the checkout without hard-coding it.
+app.post('/api/razorpay/order', async (req, res) => {
+  if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) {
+    return res.status(500).json({ error: 'Razorpay keys not configured on server' });
+  }
+
+  const { email, assessmentId, notes } = req.body || {};
+
+  try {
+    const auth = Buffer.from(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`).toString('base64');
+    const rzpRes = await fetch('https://api.razorpay.com/v1/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
+      body: JSON.stringify({
+        amount: RAZORPAY_AMOUNT,
+        currency: RAZORPAY_CURRENCY,
+        receipt: `rcpt_${Date.now()}`,
+        notes: { email: email || '', assessmentId: assessmentId || '', ...(notes || {}) },
+      }),
+    });
+
+    const order = await rzpRes.json();
+    if (!rzpRes.ok || !order.id) {
+      console.error('❌ Razorpay order error:', order);
+      return res.status(502).json({ error: 'Failed to create order', details: order?.error?.description });
+    }
+
+    console.log(`✅ Razorpay order created: ${order.id} (${order.amount} ${order.currency})`);
+    res.json({ orderId: order.id, amount: order.amount, currency: order.currency, keyId: RAZORPAY_KEY_ID });
+  } catch (error) {
+    console.error('❌ Razorpay order creation failed:', error);
+    res.status(500).json({ error: 'Failed to create order' });
+  }
+});
+
+// Verify the payment signature returned by the checkout. The signature is an
+// HMAC-SHA256 of `order_id|payment_id` keyed with the Razorpay secret, so only
+// a genuine Razorpay-completed payment can produce a matching value.
+app.post('/api/razorpay/verify', (req, res) => {
+  if (!RAZORPAY_KEY_SECRET) {
+    return res.status(500).json({ error: 'Razorpay keys not configured on server' });
+  }
+
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body || {};
+  if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+    return res.status(400).json({ verified: false, error: 'Missing payment fields' });
+  }
+
+  const expected = crypto
+    .createHmac('sha256', RAZORPAY_KEY_SECRET)
+    .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+    .digest('hex');
+
+  if (!safeEqual(expected, razorpay_signature)) {
+    console.warn(`⚠️ Signature mismatch for order ${razorpay_order_id}`);
+    return res.status(400).json({ verified: false });
+  }
+
+  console.log(`✅ Payment verified: ${razorpay_payment_id} (order ${razorpay_order_id})`);
+  res.json({ verified: true, paymentId: razorpay_payment_id, orderId: razorpay_order_id });
 });
 
 app.listen(3001, () => console.log('✅ Backend running on http://localhost:3001'));
