@@ -640,6 +640,12 @@ function App() {
   useEffect(() => {
     if (!supabase) return;
     const returning = window.location.hash.includes('access_token') || window.location.search.includes('code=');
+    // Only auto-resume the account when the user is actually coming back from a
+    // Google OAuth redirect. On a normal reopen we must NOT silently restore the
+    // persisted Supabase session and jump to the previous results dashboard —
+    // reopening the app should start fresh at the onboarding screen so the user
+    // can take the assessment again.
+    if (!returning) return;
     let active = true;
     (async () => {
       const { data } = await supabase.auth.getSession();
