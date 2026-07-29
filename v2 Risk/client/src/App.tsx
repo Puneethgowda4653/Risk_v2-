@@ -503,8 +503,7 @@ function App() {
     if (saved) {
       try {
         const p = JSON.parse(saved);
-        if (p.step === 'results' && p.result) { setMetadata(p.metadata); setResult(p.result); setStep('results'); }
-        else if (p.step === 'assessment') {
+        if (p.step === 'assessment') {
           setMetadata(p.metadata);
           setSessionQuestions(p.sessionQuestions);
           setCurrentQIndex(p.currentQIndex);
@@ -522,7 +521,10 @@ function App() {
 
   useEffect(() => {
     if (step === 'assessment') localStorage.setItem('risk_assessment_session', JSON.stringify({ step, metadata, sessionQuestions, currentQIndex, responses, sliderValue }));
-    if (step === 'results' && result) localStorage.setItem('risk_assessment_session', JSON.stringify({ step, metadata, result }));
+    // Once the assessment is completed we don't persist the results dashboard.
+    // This ensures that closing and reopening the tab restarts the app at the
+    // onboarding screen instead of resuming on the previous dashboard.
+    else localStorage.removeItem('risk_assessment_session');
   }, [step, metadata, sessionQuestions, currentQIndex, responses, sliderValue, result]);
 
   const handleRegisterAndStart = async (e: React.FormEvent) => {
