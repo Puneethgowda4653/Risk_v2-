@@ -416,6 +416,49 @@ app.get('/api/session/:sessionId/payment', async (req, res) => {
   }
 });
 
+// Upload a rendered JPG of the dashboard and save its URL on the assessment.
+app.post('/api/upload-dashboard-image', async (req, res) => {
+  const { email, assessmentId, imageBase64, filename } = req.body || {};
+
+  if (!email || !imageBase64 || !filename) {
+    return res.status(400).json({ error: 'Missing required fields: email, imageBase64, filename' });
+  }
+
+  try {
+    const imageBuffer = Buffer.from(imageBase64, 'base64');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const storagePath = `${email.replace('@', '_at_')}/${timestamp}_${filename}`;
+
+    const { error: uploadError } = await supabase
+      .storage
+      .from('dashboard-images')
+      .upload(storagePath, imageBuffer, { contentType: 'image/jpeg', upsert: false });
+
+    if (uploadError) {
+      console.error('❌ Dashboard image upload error:', uploadError);
+      return res.status(500).json({ error: 'Failed to upload image', details: uploadError.message });
+    }
+
+    const { data: urlData } = supabase.storage.from('dashboard-images').getPublicUrl(storagePath);
+    const publicUrl = urlData?.publicUrl || null;
+
+    // Store the image URL on the assessment row so the admin view can show it.
+    if (assessmentId) {
+      const { error: updErr } = await supabase
+        .from('assessments')
+        .update({ dashboard_image_url: publicUrl })
+        .eq('id', assessmentId);
+      if (updErr) console.warn('⚠️ Could not set dashboard_image_url:', updErr.message);
+    }
+
+    console.log(`✅ Dashboard image stored: ${storagePath} (${(imageBuffer.length / 1024).toFixed(1)} KB)`);
+    res.json({ success: true, url: publicUrl, path: storagePath, fileSize: imageBuffer.length });
+  } catch (error) {
+    console.error('❌ Dashboard image upload failed:', error);
+    res.status(500).json({ error: 'Failed to upload dashboard image' });
+  }
+});
+
 // ============ ADMIN ============
 
 // List every assessment with its user, newest first. Protected by ADMIN_KEY
@@ -430,7 +473,7 @@ app.get('/api/admin/assessments', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('assessments')
-      .select('id, score, rating, domain_scores, flags, polycrisis_triggered, high_risk_count, result_json, metadata_json, created_at, users(name, email, company_name, stage, vertical)')
+      .select('id, score, rating, domain_scores, flags, polycrisis_triggered, high_risk_count, result_json, metadata_json, dashboard_image_url, created_at, users(name, email, company_name, stage, vertical)')
       .order('created_at', { ascending: false });
 
     if (error) {

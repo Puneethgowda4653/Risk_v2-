@@ -839,6 +839,8 @@ function App() {
       if (data.assessmentId) {
         console.log('✅ Assessment saved to Supabase! ID:', data.assessmentId, 'User ID:', data.userId);
         setSupabaseSaveStatus('saved');
+        // Capture a JPG of the rendered dashboard and store it (payment-independent).
+        captureAndUploadDashboard(data.assessmentId);
       } else {
         console.error('❌ Supabase save returned no assessmentId:', data);
         setSupabaseSaveStatus('error');
@@ -846,6 +848,40 @@ function App() {
     } catch (err) {
       console.error('❌ Failed to save to Supabase:', err);
       setSupabaseSaveStatus('error');
+    }
+  };
+
+  /* ── Snapshot the on-screen dashboard to a JPG and upload it to Supabase ── */
+  const captureAndUploadDashboard = async (assessmentId: number) => {
+    if (!metadata) return;
+    // Let the dashboard finish its entrance animation before capturing.
+    await new Promise((r) => setTimeout(r, 900));
+    const el = document.getElementById('risk-dashboard-capture');
+    if (!el) return;
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const canvas = await html2canvas(el, {
+        backgroundColor: '#f4f5f7',
+        scale: Math.min(2, window.devicePixelRatio || 1.5),
+        useCORS: true,
+        logging: false,
+        windowWidth: el.scrollWidth,
+        windowHeight: el.scrollHeight,
+      });
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      const imageBase64 = dataUrl.split(',')[1];
+      const filename = `dashboard_${(metadata.companyName || 'user').replace(/[^a-z0-9]/gi, '_')}_${Date.now()}.jpg`;
+
+      const res = await fetch(`${API_URL}/api/upload-dashboard-image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: metadata.email, assessmentId, imageBase64, filename }),
+      });
+      const data = await res.json();
+      if (data.success) console.log('✅ Dashboard image stored:', data.url);
+      else console.warn('⚠️ Dashboard image upload failed:', data.error);
+    } catch (err) {
+      console.warn('⚠️ Dashboard capture failed:', err);
     }
   };
 
@@ -1045,6 +1081,7 @@ function App() {
                   <th style={{ padding: '10px 14px', fontWeight: 700 }}>Email</th>
                   <th style={{ padding: '10px 14px', fontWeight: 700 }}>Score</th>
                   <th style={{ padding: '10px 14px', fontWeight: 700 }}>Rating</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Dashboard JPG</th>
                   <th style={{ padding: '10px 14px', fontWeight: 700 }}>Date</th>
                   <th style={{ padding: '10px 14px', fontWeight: 700 }}></th>
                 </tr>
@@ -1059,6 +1096,15 @@ function App() {
                       <td style={{ padding: '10px 14px', color: '#64748b' }}>{u.email || '—'}</td>
                       <td style={{ padding: '10px 14px', fontWeight: 700, color: scoreColor(row.score) }}>{row.score}</td>
                       <td style={{ padding: '10px 14px', color: '#334155' }}>{row.rating}</td>
+                      <td style={{ padding: '10px 14px' }}>
+                        {row.dashboard_image_url ? (
+                          <a href={row.dashboard_image_url} target="_blank" rel="noopener noreferrer">
+                            <img src={row.dashboard_image_url} alt="dashboard" style={{ width: 90, height: 'auto', borderRadius: 6, border: '1px solid #e2e8f0', display: 'block' }} />
+                          </a>
+                        ) : (
+                          <span style={{ color: '#cbd5e1', fontSize: 12 }}>—</span>
+                        )}
+                      </td>
                       <td style={{ padding: '10px 14px', color: '#94a3b8' }}>{row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</td>
                       <td style={{ padding: '10px 14px' }}>
                         <button
@@ -2338,7 +2384,7 @@ function App() {
     const confidenceLabel = validityScore > 90 ? 'High Confidence' : validityScore > 70 ? 'Medium Confidence' : 'Low Confidence';
 
     return (
-      <div className="res-root" style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans', system-ui, sans-serif", background: '#f4f5f7', overflow: 'hidden' }}>
+      <div id="risk-dashboard-capture" className="res-root" style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans', system-ui, sans-serif", background: '#f4f5f7', overflow: 'hidden' }}>
         <style>{SHARED_STYLES + `
           ::-webkit-scrollbar { width: 0; height: 0; }
           @keyframes fadeUp { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
