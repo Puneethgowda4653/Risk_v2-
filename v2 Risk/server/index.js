@@ -296,7 +296,8 @@ app.post('/api/razorpay/order', async (req, res) => {
     return res.status(500).json({ error: 'Razorpay keys not configured on server' });
   }
 
-  const { email, assessmentId, notes } = req.body || {};
+  const { email, assessmentId, notes, sessionId: clientSessionId } = req.body || {};
+  const sessionId = clientSessionId || uuidv4();
 
   try {
     const auth = Buffer.from(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`).toString('base64');
@@ -307,7 +308,7 @@ app.post('/api/razorpay/order', async (req, res) => {
         amount: RAZORPAY_AMOUNT,
         currency: RAZORPAY_CURRENCY,
         receipt: `rcpt_${Date.now()}`,
-        notes: { email: email || '', assessmentId: assessmentId || '', ...(notes || {}) },
+        notes: { email: email || '', assessmentId: assessmentId || '', session_id: sessionId, ...(notes || {}) },
       }),
     });
 
@@ -317,39 +318,97 @@ app.post('/api/razorpay/order', async (req, res) => {
       return res.status(502).json({ error: 'Failed to create order', details: order?.error?.description });
     }
 
-    console.log(`✅ Razorpay order created: ${order.id} (${order.amount} ${order.currency})`);
-    res.json({ orderId: order.id, amount: order.amount, currency: order.currency, keyId: RAZORPAY_KEY_ID });
+    // Persist the order → session link so /payment-status can recover the
+    // session (and so the paid flag survives page refreshes via polling).
+    try {
+      await supabase.from('payment_sessions').insert([
+        { order_id: order.id, session_id: sessionId, email: email || null, paid: false },
+      ]);
+    } catch (e) {
+      console.warn('⚠️ Could not persist payment_session:', e?.message || e);
+    }
+
+    console.log(`✅ Razorpay order created: ${order.id} (${order.amount} ${order.currency}) session=${sessionId}`);
+    res.json({ orderId: order.id, amount: order.amount, currency: order.currency, keyId: RAZORPAY_KEY_ID, sessionId });
   } catch (error) {
     console.error('❌ Razorpay order creation failed:', error);
     res.status(500).json({ error: 'Failed to create order' });
   }
 });
 
-// Verify the payment signature returned by the checkout. The signature is an
-// HMAC-SHA256 of `order_id|payment_id` keyed with the Razorpay secret, so only
-// a genuine Razorpay-completed payment can produce a matching value.
-app.post('/api/razorpay/verify', (req, res) => {
-  if (!RAZORPAY_KEY_SECRET) {
-    return res.status(500).json({ error: 'Razorpay keys not configured on server' });
+// Landing endpoint the external Payment Hub forwards the browser to. It verifies
+// the signature server-side, marks the session paid, then redirects the user
+// back to our frontend with ?session=...&payment=success|failed.
+//
+// The signature is an HMAC-SHA256 of `order_id|payment_id` keyed with the
+// Razorpay secret, so only a genuine Razorpay-completed payment can match it.
+app.get('/payment-status', async (req, res) => {
+  const frontend = process.env.FRONTEND_URL || 'https://risk.infopaceindia.co.in';
+
+  // Accept both the bare names the Hub forwards and the razorpay_-prefixed ones.
+  const order_id = req.query.order_id || req.query.razorpay_order_id;
+  const payment_id = req.query.payment_id || req.query.razorpay_payment_id;
+  const signature = req.query.signature || req.query.razorpay_signature;
+
+  // Recover our session id from the order (best-effort).
+  let sessionId = '';
+  if (order_id) {
+    try {
+      const { data } = await supabase
+        .from('payment_sessions')
+        .select('session_id')
+        .eq('order_id', order_id)
+        .single();
+      sessionId = data?.session_id || '';
+    } catch { /* not found — continue with empty session */ }
   }
 
-  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body || {};
-  if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-    return res.status(400).json({ verified: false, error: 'Missing payment fields' });
+  const redirectFail = () =>
+    res.redirect(`${frontend}?session=${encodeURIComponent(sessionId)}&payment=failed`);
+
+  if (!RAZORPAY_KEY_SECRET || !order_id || !payment_id || !signature) {
+    console.warn('⚠️ /payment-status called with missing params or no server secret');
+    return redirectFail();
   }
 
   const expected = crypto
     .createHmac('sha256', RAZORPAY_KEY_SECRET)
-    .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+    .update(`${order_id}|${payment_id}`)
     .digest('hex');
 
-  if (!safeEqual(expected, razorpay_signature)) {
-    console.warn(`⚠️ Signature mismatch for order ${razorpay_order_id}`);
-    return res.status(400).json({ verified: false });
+  if (!safeEqual(expected, signature)) {
+    console.warn(`🚨 Signature verification FAILED (possible tampering) for order ${order_id}`);
+    return redirectFail();
   }
 
-  console.log(`✅ Payment verified: ${razorpay_payment_id} (order ${razorpay_order_id})`);
-  res.json({ verified: true, paymentId: razorpay_payment_id, orderId: razorpay_order_id });
+  // Signature OK — mark the session paid.
+  try {
+    await supabase
+      .from('payment_sessions')
+      .update({ paid: true, payment_id, updated_at: new Date().toISOString() })
+      .eq('order_id', order_id);
+  } catch (e) {
+    console.error('❌ Failed to mark session paid:', e?.message || e);
+  }
+
+  console.log(`✅ Payment verified & session ${sessionId} marked paid (order ${order_id})`);
+  return res.redirect(`${frontend}?session=${encodeURIComponent(sessionId)}&payment=success`);
+});
+
+// Polled by the frontend so a page refresh can re-hydrate the paid flag.
+app.get('/api/session/:sessionId/payment', async (req, res) => {
+  const { sessionId } = req.params;
+  try {
+    const { data } = await supabase
+      .from('payment_sessions')
+      .select('paid')
+      .eq('session_id', sessionId)
+      .eq('paid', true)
+      .limit(1);
+    res.json({ paid: Array.isArray(data) && data.length > 0 });
+  } catch {
+    res.json({ paid: false });
+  }
 });
 
 app.listen(3001, () => console.log('✅ Backend running on http://localhost:3001'));

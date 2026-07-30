@@ -1,11 +1,11 @@
 /* ══════════════════════════════════════════════════════════════════════════
    Razorpay Modal Checkout helper.
 
-   Razorpay's overlay is a cross-origin iframe, so modern browsers forbid it
-   from navigating our (the parent) window. We therefore drive the whole flow
-   from our own code: create the order on our secure backend, open the modal,
-   verify the signature, and hand control back to the caller — which then
-   performs the top-level redirect to the external Payment Hub.
+   Razorpay's overlay is a cross-origin iframe, so browsers forbid it from
+   navigating our (the parent) window. We therefore create the order on our
+   secure backend, open the modal, and — in the client-side success `handler` —
+   hand the response back to the caller, which redirects the top-level window to
+   the external Payment Hub itself. No `callback_url` / `callback_method` is set.
    ══════════════════════════════════════════════════════════════════════════ */
 
 declare global {
@@ -43,10 +43,12 @@ export interface CheckoutOptions {
   name: string;
   email: string;
   companyName?: string;
+  /** Our app session id (from /api/start) so the backend can track payment. */
+  sessionId?: string | null;
   assessmentId?: string | null;
-  /** Fired after the signature is verified on our backend. */
+  /** Success handler — receives the Razorpay response for the Hub redirect. */
   onSuccess: (result: RazorpayResult) => void;
-  /** Fired on payment.failed, a load/order/verify error, or a bad signature. */
+  /** Fired on payment.failed or a load/order error. */
   onFailure: (reason: string, meta?: { orderId?: string }) => void;
   /** Fired when the user closes the modal without paying. */
   onDismiss?: () => void;
@@ -69,6 +71,7 @@ export async function startRazorpayCheckout(opts: CheckoutOptions): Promise<void
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: opts.email,
+        sessionId: opts.sessionId ?? null,
         assessmentId: opts.assessmentId ?? null,
         notes: { purpose: 'risk_report_pdf', company: opts.companyName || '' },
       }),
@@ -83,7 +86,8 @@ export async function startRazorpayCheckout(opts: CheckoutOptions): Promise<void
     return;
   }
 
-  // 2. Open the modal checkout.
+  // 2. Open the modal checkout. NOTE: no callback_url / callback_method — the
+  //    success `handler` runs in our page context and drives the redirect.
   const rzp = new window.Razorpay({
     key: order.keyId,
     order_id: order.orderId,
@@ -93,22 +97,7 @@ export async function startRazorpayCheckout(opts: CheckoutOptions): Promise<void
     description: 'Full risk assessment PDF report',
     prefill: { name: opts.name, email: opts.email },
     theme: { color: '#0ea5e9' },
-    // Success handler — we cannot let the overlay redirect us, so we take the
-    // response, verify it, and let the caller perform the top-level redirect.
-    handler: async (response: RazorpayResult) => {
-      try {
-        const vr = await fetch(`${apiUrl}/api/razorpay/verify`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(response),
-        });
-        const vd = await vr.json();
-        if (vr.ok && vd.verified) opts.onSuccess(response);
-        else opts.onFailure('signature_invalid', { orderId: order.orderId });
-      } catch {
-        opts.onFailure('verify_failed', { orderId: order.orderId });
-      }
-    },
+    handler: (response: RazorpayResult) => opts.onSuccess(response),
     modal: {
       ondismiss: () => opts.onDismiss?.(),
     },
@@ -119,22 +108,4 @@ export async function startRazorpayCheckout(opts: CheckoutOptions): Promise<void
   });
 
   rzp.open();
-}
-
-/**
- * Navigate the top-level window to `url`, escaping any parent frame we're
- * embedded in. Setting `window.top.location.href` is one of the few
- * cross-origin operations browsers still permit; if the parent blocks it we
- * fall back to navigating our own window.
- */
-export function redirectTopLevel(url: string): void {
-  try {
-    if (window.top && window.top !== window.self) {
-      window.top.location.href = url;
-      return;
-    }
-  } catch {
-    /* cross-origin parent — fall through to same-window navigation */
-  }
-  window.location.href = url;
 }

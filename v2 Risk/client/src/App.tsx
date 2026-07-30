@@ -5,22 +5,28 @@ import { generateUniqueAssessment, calculateRiskScore, getBenchmarkData, DOMAINS
 import { generatePDF } from './utils/pdfGenerator';
 import CursorField from './CursorField';
 import { supabase } from './supabaseClient';
-import { startRazorpayCheckout, redirectTopLevel } from './utils/razorpayPayment';
+import { startRazorpayCheckout } from './utils/razorpayPayment';
+import type { RazorpayResult } from './utils/razorpayPayment';
 import './index.css';
 
 const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:3001' : window.location.origin);
 
-// Centralized external "Payment Hub" static site that hosts the success/failure
-// landing pages. The top-level window is redirected here after checkout.
-const PAYMENT_HUB_URL = import.meta.env.VITE_PAYMENT_HUB_URL || '';
+// Centralized external "Payment Hub" static site. After a successful checkout we
+// redirect the top-level window here with the Razorpay identifiers appended; the
+// Hub forwards the user to our /payment-status endpoint for verification.
+// NOTE: the base already carries ?app_id=... — verify that app_id matches THIS
+// app in the Hub's configuration.
+const PAYMENT_HUB_URL = import.meta.env.VITE_PAYMENT_HUB_URL || 'https://payment-t1ag.onrender.com/?app_id=cofit';
 
-/** Build a Payment Hub URL carrying the outcome status and payment identifiers. */
-const buildHubUrl = (status: 'success' | 'failure', params: Record<string, string>): string => {
-  const base = PAYMENT_HUB_URL || `${window.location.origin}/payment`;
-  const url = new URL(base);
-  url.searchParams.set('status', status);
-  Object.entries(params).forEach(([k, v]) => { if (v) url.searchParams.set(k, v); });
-  return url.toString();
+/** Append the Razorpay identifiers to the Payment Hub base URL. */
+const buildHubRedirectUrl = (r: RazorpayResult): string => {
+  const sep = PAYMENT_HUB_URL.includes('?') ? '&' : '?';
+  const params = new URLSearchParams({
+    razorpay_payment_id: r.razorpay_payment_id,
+    razorpay_order_id: r.razorpay_order_id,
+    razorpay_signature: r.razorpay_signature,
+  });
+  return `${PAYMENT_HUB_URL}${sep}${params.toString()}`;
 };
 
 type Step = 'onboarding' | 'assessment' | 'results' | 'retest';
@@ -500,6 +506,8 @@ function App() {
   const [modal, setModal] = useState<{ title: string; subtitle?: string } | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [serverSessionId, setServerSessionId] = useState<string | null>(null);
+  const [paid, setPaid] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   const [supabaseSaveStatus, setSupabaseSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [pdfUploadStatus, setPdfUploadStatus] = useState<'idle' | 'generating' | 'uploading' | 'done' | 'error'>('idle');
   const [showEarlyBirdsPopup, setShowEarlyBirdsPopup] = useState(false);
@@ -541,6 +549,76 @@ function App() {
     else localStorage.removeItem('risk_assessment_session');
   }, [step, metadata, sessionQuestions, currentQIndex, responses, sliderValue, result]);
 
+  /* ── Payment return: hydrate the paid flag + dashboard, keep across refreshes ── */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get('payment');
+    const sessionFromUrl = params.get('session');
+
+    // Restore the results dashboard saved for a paid session (see snapshot effect
+    // below). This is only ever consumed for a paid/returning session, so an
+    // ordinary reopen still starts fresh.
+    const restoreSnapshot = (): boolean => {
+      try {
+        const snap = localStorage.getItem('risk_result_snapshot');
+        if (snap) {
+          const { metadata: m, result: r } = JSON.parse(snap);
+          if (r) { setMetadata(m); setResult(r); setStep('results'); return true; }
+        }
+      } catch { /* ignore malformed snapshot */ }
+      return false;
+    };
+
+    // 1. Handle the redirect coming back from /payment-status.
+    if (payment) {
+      if (payment === 'success') {
+        setPaid(true);
+        setPaymentError(null);
+        if (sessionFromUrl) {
+          setServerSessionId(sessionFromUrl);
+          localStorage.setItem('risk_payment_session', sessionFromUrl);
+        }
+        restoreSnapshot();
+      } else if (payment === 'failed') {
+        setPaid(false);
+        setPaymentError('Payment could not be verified. Please try again.');
+        restoreSnapshot(); // bring them back to the dashboard to retry
+      }
+      // Strip the payment params so a refresh doesn't re-trigger this.
+      params.delete('payment');
+      params.delete('session');
+      const clean = window.location.pathname + (params.toString() ? `?${params}` : '');
+      window.history.replaceState({}, document.title, clean);
+    }
+
+    // 2. Re-hydrate paid state from the DB so a manual refresh doesn't re-lock.
+    const knownSession = sessionFromUrl || localStorage.getItem('risk_payment_session');
+    if (knownSession) {
+      (async () => {
+        try {
+          const res = await fetch(`${API_URL}/api/session/${encodeURIComponent(knownSession)}/payment`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.paid) {
+              setPaid(true);
+              if (!payment) restoreSnapshot();
+            } else if (!payment) {
+              localStorage.removeItem('risk_result_snapshot'); // unpaid → don't keep a stale dashboard
+            }
+          }
+        } catch { /* offline — ignore */ }
+      })();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist the dashboard for a paid session so refreshes keep it unlocked.
+  useEffect(() => {
+    if (paid && result) {
+      localStorage.setItem('risk_result_snapshot', JSON.stringify({ metadata, result }));
+    }
+  }, [paid, result, metadata]);
+
   const handleRegisterAndStart = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!metadata.name || !metadata.companyName || !metadata.email) return alert('Please fill all fields');
@@ -563,6 +641,7 @@ function App() {
       });
       const data = await res.json();
       setServerSessionId(data.sessionId);
+      if (data.sessionId) localStorage.setItem('risk_payment_session', data.sessionId);
       console.log('✅ Server session created:', data.sessionId);
     } catch (err) {
       console.warn('⚠️ Could not reach backend server, continuing offline:', err);
@@ -762,45 +841,47 @@ function App() {
     }
   };
 
-  /* ── Pay for the report, then hand off to the external Payment Hub ── */
+  /* ── PDF button: download if already paid, otherwise open checkout ── */
   const handleDownloadPDF = async () => {
     if (!result || !metadata) return;
 
+    // Already paid (this session or re-hydrated from the DB) → deliver the report.
+    if (paid) {
+      setShowEarlyBirdsPopup(true);
+      try {
+        await generateAndUploadReport();
+      } catch (err) {
+        console.error('❌ Report preparation failed:', err);
+      }
+      return;
+    }
+
+    // Not paid yet → run Razorpay checkout.
+    setPaymentError(null);
     await startRazorpayCheckout({
       apiUrl: API_URL,
       name: metadata.name,
       email: metadata.email,
       companyName: metadata.companyName,
+      sessionId: serverSessionId,
       assessmentId: null,
       // User closed the modal without paying — stay on the dashboard.
       onDismiss: () => {
-        setShowEarlyBirdsPopup(false);
         setPdfUploadStatus('idle');
       },
-      // Payment failed / could not be started — send the top window to the Hub.
-      onFailure: (reason, meta) => {
-        redirectTopLevel(buildHubUrl('failure', {
-          reason,
-          order_id: meta?.orderId || '',
-          email: metadata.email,
-        }));
+      // Payment could not be started / failed — surface an inline message.
+      onFailure: (reason) => {
+        console.warn('⚠️ Payment failed:', reason);
+        setPaymentError('Payment could not be completed. Please try again.');
       },
-      // Payment verified server-side — prepare the report, then hand off to the Hub.
-      onSuccess: async (response) => {
-        setShowEarlyBirdsPopup(true); // reuse the "preparing your report" overlay
-        let reportUrl: string | null = null;
+      // Success handler runs in our page context: save the dashboard so it
+      // survives the round-trip, then redirect the top-level window to the
+      // external Payment Hub with the Razorpay identifiers appended.
+      onSuccess: (response) => {
         try {
-          reportUrl = await generateAndUploadReport();
-        } catch (err) {
-          console.error('❌ Report preparation failed after payment:', err);
-        }
-        redirectTopLevel(buildHubUrl('success', {
-          payment_id: response.razorpay_payment_id,
-          order_id: response.razorpay_order_id,
-          signature: response.razorpay_signature,
-          email: metadata.email,
-          report: reportUrl || '',
-        }));
+          localStorage.setItem('risk_result_snapshot', JSON.stringify({ metadata, result }));
+        } catch { /* ignore quota errors */ }
+        window.location.href = buildHubRedirectUrl(response);
       },
     });
   };
@@ -868,6 +949,9 @@ function App() {
 
   const handleReset = () => {
     localStorage.removeItem('risk_assessment_session');
+    localStorage.removeItem('risk_result_snapshot');
+    localStorage.removeItem('risk_payment_session');
+    setPaid(false); setPaymentError(null);
     setStep('onboarding'); setResult(null); setResponses([]); setSessionQuestions([]); setCurrentQIndex(0);
   };
 
@@ -2191,7 +2275,7 @@ function App() {
             </div>
             <span style={{ color: 'white', fontSize: 9, fontWeight: 600 }}>{metadata.name.split(' ')[0]}</span>
             <button className="db-btn" onClick={handleDownloadPDF} disabled={pdfUploadStatus === 'generating' || pdfUploadStatus === 'uploading'} style={{ background: pdfUploadStatus === 'done' ? 'rgba(34,197,94,.85)' : pdfUploadStatus === 'error' ? 'rgba(239,68,68,.85)' : pdfUploadStatus === 'generating' || pdfUploadStatus === 'uploading' ? 'rgba(99,102,241,.7)' : 'rgba(255,255,255,.15)', color: 'white', transition: 'all .3s ease' }}>
-              {pdfUploadStatus === 'generating' ? '⏳ Generating…' : pdfUploadStatus === 'uploading' ? '☁️ Uploading…' : pdfUploadStatus === 'done' ? '✅ Saved!' : pdfUploadStatus === 'error' ? '❌ Failed' : '📄 PDF'}
+              {pdfUploadStatus === 'generating' ? '⏳ Generating…' : pdfUploadStatus === 'uploading' ? '☁️ Uploading…' : pdfUploadStatus === 'done' ? '✅ Saved!' : pdfUploadStatus === 'error' ? '❌ Failed' : paid ? '📄 PDF' : '🔒 Unlock PDF'}
             </button>
             <button className="db-btn db-btn-hide" style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>📋 Plan</button>
             <button className="db-btn" onClick={handleReset} style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>↺ Retake</button>
@@ -2646,6 +2730,20 @@ function App() {
         )}
 
         {/* ── EARLY BIRDS POPUP ── */}
+        {paymentError && (
+          <div
+            onClick={() => setPaymentError(null)}
+            style={{
+              position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)',
+              background: '#ef4444', color: 'white', padding: '10px 18px', borderRadius: 10,
+              fontSize: 13, fontWeight: 600, zIndex: 10000, cursor: 'pointer',
+              boxShadow: '0 8px 24px rgba(239,68,68,.35)',
+            }}
+          >
+            ⚠️ {paymentError} <span style={{ opacity: 0.8, marginLeft: 6 }}>✕</span>
+          </div>
+        )}
+
         {showEarlyBirdsPopup && (
           <div style={{
             position: 'fixed',
