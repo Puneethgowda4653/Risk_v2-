@@ -9,7 +9,7 @@ const supabase = require('./supabaseClient');
 // ── Razorpay config (server-enforced price; never trust the client for amount) ──
 const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID;
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
-const RAZORPAY_AMOUNT = parseInt(process.env.RAZORPAY_AMOUNT || '100', 10); // in paise — TESTING: ₹1 (revert to 49900 for ₹499)
+const RAZORPAY_AMOUNT = parseInt(process.env.RAZORPAY_AMOUNT || '100', 10); // in paise — ₹1 (override with RAZORPAY_AMOUNT)
 const RAZORPAY_CURRENCY = process.env.RAZORPAY_CURRENCY || 'INR';
 
 // Constant-time compare that tolerates unequal-length inputs.
