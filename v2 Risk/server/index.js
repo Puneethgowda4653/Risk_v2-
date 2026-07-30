@@ -41,7 +41,7 @@ app.post('/api/respond', (req, res) => {
 });
 
 app.post('/api/complete', async (req, res) => {
-  const { sessionId, metadata: bodyMetadata, responses: bodyResponses } = req.body;
+  const { sessionId, metadata: bodyMetadata, responses: bodyResponses, result: bodyResult } = req.body;
   const session = sessions[sessionId];
   // The in-memory session is wiped on every backend restart/redeploy, so fall
   // back to the metadata/responses the client already has in state.
@@ -98,7 +98,12 @@ app.post('/api/complete', async (req, res) => {
           domain_scores: result.domainScores,
           flags: result.flags,
           polycrisis_triggered: result.polycrisisTriggered,
-          high_risk_count: result.highRiskCount
+          high_risk_count: result.highRiskCount,
+          // Full dashboard object as computed on the client (falls back to the
+          // server-computed result), plus a metadata snapshot, so the exact
+          // dashboard can be reloaded verbatim.
+          result_json: bodyResult || result,
+          metadata_json: metadata
         }
       ])
       .select('id')
@@ -138,7 +143,7 @@ app.get('/api/user/:email/assessments', async (req, res) => {
     
     const { data: assessments, error: assessmentError } = await supabase
       .from('assessments')
-      .select('id, score, rating, created_at, domain_scores, flags')
+      .select('id, score, rating, created_at, domain_scores, flags, result_json, metadata_json')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
     
@@ -425,7 +430,7 @@ app.get('/api/admin/assessments', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('assessments')
-      .select('id, score, rating, domain_scores, flags, polycrisis_triggered, high_risk_count, created_at, users(name, email, company_name, stage, vertical)')
+      .select('id, score, rating, domain_scores, flags, polycrisis_triggered, high_risk_count, result_json, metadata_json, created_at, users(name, email, company_name, stage, vertical)')
       .order('created_at', { ascending: false });
 
     if (error) {

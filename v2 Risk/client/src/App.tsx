@@ -646,14 +646,17 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Open one user's saved dashboard from the admin list.
+  // Open one user's saved dashboard from the admin list. Prefer the full stored
+  // result object; fall back to reconstruction from the summary columns.
   const openAdminAssessment = (row: any) => {
     const u = row.users || {};
+    const m = row.metadata_json || {};
     setMetadata({
-      name: u.name || '', companyName: u.company_name || '', email: u.email || '',
-      stage: u.stage || 'seed', vertical: u.vertical || 'saas-b2b', usesAi: false, physicalProduct: false,
+      name: m.name || u.name || '', companyName: m.companyName || u.company_name || '', email: m.email || u.email || '',
+      stage: m.stage || u.stage || 'seed', vertical: m.vertical || u.vertical || 'saas-b2b',
+      usesAi: m.usesAi ?? false, physicalProduct: m.physicalProduct ?? false,
     });
-    setResult(reconstructResultFromRow(row));
+    setResult(row.result_json || reconstructResultFromRow(row));
     setStep('results');
     window.scrollTo(0, 0);
   };
@@ -722,7 +725,7 @@ function App() {
       const latest = historyData.assessments?.[0];
 
       if (latest) {
-        setResult(reconstructResultFromRow(latest));
+        setResult(latest.result_json || reconstructResultFromRow(latest));
         setStep('results');
       } else {
         // No past assessment yet — go straight into a new one with their known profile
@@ -829,6 +832,7 @@ function App() {
           sessionId: serverSessionId,
           metadata,
           responses: responses.map(r => ({ domain: r.domainId, value: r.value })),
+          result, // full dashboard object so it is stored verbatim in Supabase
         }),
       });
       const data = await res.json();
