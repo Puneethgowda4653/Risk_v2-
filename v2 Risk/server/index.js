@@ -411,5 +411,34 @@ app.get('/api/session/:sessionId/payment', async (req, res) => {
   }
 });
 
+// ============ ADMIN ============
+
+// List every assessment with its user, newest first. Protected by ADMIN_KEY
+// (passed as ?key= or an x-admin-key header).
+app.get('/api/admin/assessments', async (req, res) => {
+  const adminKey = process.env.ADMIN_KEY;
+  const provided = req.query.key || req.headers['x-admin-key'];
+  if (!adminKey || provided !== adminKey) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('assessments')
+      .select('id, score, rating, domain_scores, flags, polycrisis_triggered, high_risk_count, created_at, users(name, email, company_name, stage, vertical)')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('❌ Admin assessments fetch error:', error);
+      return res.status(500).json({ error: 'Failed to fetch assessments' });
+    }
+
+    res.json({ count: data?.length || 0, assessments: data || [] });
+  } catch (e) {
+    console.error('❌ Admin error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 app.listen(3001, () => console.log('✅ Backend running on http://localhost:3001'));
 console.log('🔗 Supabase connected via', process.env.SUPABASE_URL ? 'environment variables' : 'fallback');

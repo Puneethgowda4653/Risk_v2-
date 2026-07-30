@@ -507,6 +507,10 @@ function App() {
   const [serverSessionId, setServerSessionId] = useState<string | null>(null);
   const [paid, setPaid] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [adminMode, setAdminMode] = useState(false);
+  const [adminData, setAdminData] = useState<any[]>([]);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminError, setAdminError] = useState<string | null>(null);
   const [supabaseSaveStatus, setSupabaseSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [pdfUploadStatus, setPdfUploadStatus] = useState<'idle' | 'generating' | 'uploading' | 'done' | 'error'>('idle');
   const [showEarlyBirdsPopup, setShowEarlyBirdsPopup] = useState(false);
@@ -617,6 +621,45 @@ function App() {
       localStorage.setItem('risk_result_snapshot', JSON.stringify({ metadata, result }));
     }
   }, [paid, result, metadata]);
+
+  /* ── Admin view: ?admin=KEY loads every user's saved assessment ── */
+  useEffect(() => {
+    const key = new URLSearchParams(window.location.search).get('admin');
+    if (!key) return;
+    setAdminMode(true);
+    setIsLoading(false);
+    setAdminLoading(true);
+    (async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/admin/assessments?key=${encodeURIComponent(key)}`);
+        if (!res.ok) {
+          setAdminError(res.status === 401 ? 'Invalid admin key.' : 'Failed to load assessments.');
+        } else {
+          const data = await res.json();
+          setAdminData(data.assessments || []);
+        }
+      } catch {
+        setAdminError('Could not reach the server.');
+      }
+      setAdminLoading(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Open one user's saved dashboard from the admin list.
+  const openAdminAssessment = (row: any) => {
+    const u = row.users || {};
+    setMetadata({
+      name: u.name || '', companyName: u.company_name || '', email: u.email || '',
+      stage: u.stage || 'seed', vertical: u.vertical || 'saas-b2b', usesAi: false, physicalProduct: false,
+    });
+    setResult(reconstructResultFromRow(row));
+    setStep('results');
+    window.scrollTo(0, 0);
+  };
+
+  // Return from a dashboard to the admin list.
+  const backToAdminList = () => { setResult(null); setStep('onboarding'); };
 
   const handleRegisterAndStart = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -969,6 +1012,66 @@ function App() {
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid #e5e7eb', borderTopColor: '#2563eb', animation: 'spin 0.8s linear infinite', marginBottom: 16 }} />
       <p style={{ color: '#9ca3af', fontSize: 13 }}>{isGenerating ? 'Generating assessment…' : 'Loading…'}</p>
+    </div>
+  );
+
+  /* ── ADMIN: list every user's saved assessment ── */
+  if (adminMode && step !== 'results') return (
+    <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: "'Roboto', system-ui, sans-serif", padding: '24px 16px' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 8 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a' }}>Risk Assessments — Admin</h1>
+          <span style={{ fontSize: 13, color: '#64748b' }}>{adminData.length} record{adminData.length === 1 ? '' : 's'}</span>
+        </div>
+
+        {adminLoading && <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Loading assessments…</div>}
+        {adminError && <div style={{ padding: 16, background: '#fef2f2', color: '#b91c1c', borderRadius: 10, fontSize: 14 }}>⚠️ {adminError}</div>}
+
+        {!adminLoading && !adminError && adminData.length === 0 && (
+          <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>No assessments found yet.</div>
+        )}
+
+        {!adminLoading && !adminError && adminData.length > 0 && (
+          <div style={{ overflowX: 'auto', background: 'white', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,.08)' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: '#f1f5f9', textAlign: 'left', color: '#475569' }}>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Name</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Company</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Email</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Score</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Rating</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Date</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {adminData.map((row: any, i: number) => {
+                  const u = row.users || {};
+                  return (
+                    <tr key={row.id ?? i} style={{ borderTop: '1px solid #e2e8f0' }}>
+                      <td style={{ padding: '10px 14px', fontWeight: 600, color: '#0f172a' }}>{u.name || '—'}</td>
+                      <td style={{ padding: '10px 14px', color: '#334155' }}>{u.company_name || '—'}</td>
+                      <td style={{ padding: '10px 14px', color: '#64748b' }}>{u.email || '—'}</td>
+                      <td style={{ padding: '10px 14px', fontWeight: 700, color: scoreColor(row.score) }}>{row.score}</td>
+                      <td style={{ padding: '10px 14px', color: '#334155' }}>{row.rating}</td>
+                      <td style={{ padding: '10px 14px', color: '#94a3b8' }}>{row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</td>
+                      <td style={{ padding: '10px 14px' }}>
+                        <button
+                          onClick={() => openAdminAssessment(row)}
+                          style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: '#2563eb', color: 'white', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}
+                        >
+                          View dashboard
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 
@@ -2729,6 +2832,20 @@ function App() {
         )}
 
         {/* ── EARLY BIRDS POPUP ── */}
+        {adminMode && (
+          <button
+            onClick={backToAdminList}
+            style={{
+              position: 'fixed', top: 16, left: 16, zIndex: 10000,
+              background: '#0f172a', color: 'white', border: 'none', borderRadius: 10,
+              padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              boxShadow: '0 6px 20px rgba(0,0,0,.25)',
+            }}
+          >
+            ← All results
+          </button>
+        )}
+
         {paymentError && (
           <div
             onClick={() => setPaymentError(null)}
