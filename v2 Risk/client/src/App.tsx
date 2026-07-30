@@ -867,6 +867,17 @@ function App() {
         logging: false,
         windowWidth: el.scrollWidth,
         windowHeight: el.scrollHeight,
+        // html2canvas re-triggers CSS animations on the cloned DOM and snapshots
+        // before they finish, so entrance-animated cards (.fi, opacity:0) render
+        // blank. Disable animations/transitions and force them visible.
+        onclone: (doc: Document) => {
+          const style = doc.createElement('style');
+          style.textContent =
+            '*{animation:none !important;transition:none !important;}' +
+            '.fi{opacity:1 !important;transform:none !important;}' +
+            '.res-root{height:auto !important;overflow:visible !important;}';
+          doc.head.appendChild(style);
+        },
       });
       const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
       const imageBase64 = dataUrl.split(',')[1];
