@@ -14,9 +14,8 @@ const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'l
 // Centralized external "Payment Hub" static site. After a successful checkout we
 // redirect the top-level window here with the Razorpay identifiers appended; the
 // Hub forwards the user to our /payment-status endpoint for verification.
-// NOTE: the base already carries ?app_id=... — verify that app_id matches THIS
-// app in the Hub's configuration.
-const PAYMENT_HUB_URL = import.meta.env.VITE_PAYMENT_HUB_URL || 'https://payment-t1ag.onrender.com/?app_id=cofit';
+// The base carries ?app_id=risk, which identifies this app in the Hub's routing.
+const PAYMENT_HUB_URL = import.meta.env.VITE_PAYMENT_HUB_URL || 'https://payment-t1ag.onrender.com/?app_id=risk';
 
 /** Append the Razorpay identifiers to the Payment Hub base URL. */
 const buildHubRedirectUrl = (r: RazorpayResult): string => {
