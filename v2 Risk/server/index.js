@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const { v4: uuidv4 } = require('uuid');
 const { calculateScore } = require('./scoringEngine');
 const supabase = require('./supabaseClient');
@@ -12,6 +14,16 @@ const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
 const RAZORPAY_AMOUNT = parseInt(process.env.RAZORPAY_AMOUNT || '100', 10); // in paise — ₹1 (override with RAZORPAY_AMOUNT)
 const RAZORPAY_CURRENCY = process.env.RAZORPAY_CURRENCY || 'INR';
 
+const ADMIN_KEY = process.env.ADMIN_KEY || '';
+// Secret used to sign short-lived upload tokens; reuses the Razorpay secret if a
+// dedicated APP_SECRET is not set.
+const APP_SECRET = process.env.APP_SECRET || RAZORPAY_KEY_SECRET || '';
+// Comma-separated allowlist of browser origins permitted to call the API.
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ||
+  'https://risk.infopaceindia.co.in,http://localhost:5173,http://localhost:3000')
+  .split(',').map((s) => s.trim()).filter(Boolean);
+
+// ── Security helpers ──────────────────────────────────────────────────────────
 // Constant-time compare that tolerates unequal-length inputs.
 function safeEqual(a, b) {
   const ba = Buffer.from(String(a), 'utf8');
@@ -20,9 +32,58 @@ function safeEqual(a, b) {
   return crypto.timingSafeEqual(ba, bb);
 }
 
+const isEmail = (v) => typeof v === 'string' && v.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+const isStr = (v, max = 300) => typeof v === 'string' && v.length > 0 && v.length <= max;
+
+// Strip anything that could escape the intended storage folder.
+function safeFilename(name, fallback) {
+  const base = String(name || '').split(/[\\/]/).pop() || '';        // drop path segments
+  const cleaned = base.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/\.{2,}/g, '_').slice(0, 120);
+  return cleaned || fallback;
+}
+const safeSegment = (v) => String(v || '').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
+
+// Short-lived signed token (HMAC) authorising a follow-up upload.
+function signToken(payload) {
+  if (!APP_SECRET) return '';
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = crypto.createHmac('sha256', APP_SECRET).update(body).digest('base64url');
+  return `${body}.${sig}`;
+}
+function verifyToken(token) {
+  if (!token || !APP_SECRET) return null;
+  const [body, sig] = String(token).split('.');
+  if (!body || !sig) return null;
+  const expected = crypto.createHmac('sha256', APP_SECRET).update(body).digest('base64url');
+  if (!safeEqual(expected, sig)) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(body, 'base64url').toString());
+    if (payload.exp && Date.now() > payload.exp) return null;
+    return payload;
+  } catch { return null; }
+}
+
 const app = express();
-app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+app.set('trust proxy', 1); // behind Render's proxy — needed for correct rate-limit IPs
+app.use(helmet());
+app.use(cors({
+  origin(origin, cb) {
+    // Allow same-origin / server-to-server (no Origin header) and allowlisted origins.
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    return cb(new Error('Not allowed by CORS'));
+  },
+}));
+
+// Body limits: small by default; the upload routes opt into a larger limit first
+// (express.json skips a body it has already parsed).
+app.use('/api/upload-pdf', express.json({ limit: '12mb' }));
+app.use('/api/upload-dashboard-image', express.json({ limit: '12mb' }));
+app.use(express.json({ limit: '1mb' }));
+
+// Rate limiting: a general cap for everything, tighter caps for sensitive routes.
+const generalLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300, standardHeaders: true, legacyHeaders: false });
+const sensitiveLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 40, standardHeaders: true, legacyHeaders: false });
+app.use(generalLimiter);
 
 const sessions = {};
 
@@ -48,6 +109,12 @@ app.post('/api/complete', async (req, res) => {
   const metadata = session ? session.metadata : bodyMetadata;
   const responses = session ? session.responses : bodyResponses;
   if (!metadata || !responses) return res.status(404).json({ error: 'Assessment data not found' });
+  if (!isEmail(metadata.email) || !isStr(metadata.name, 200) || !isStr(metadata.companyName, 200)) {
+    return res.status(400).json({ error: 'Invalid assessment metadata' });
+  }
+  if (!Array.isArray(responses) || responses.length > 500) {
+    return res.status(400).json({ error: 'Invalid responses' });
+  }
 
   const result = calculateScore(responses, metadata);
 
@@ -115,9 +182,11 @@ app.post('/api/complete', async (req, res) => {
     }
     
     console.log(`✅ Assessment saved: User ${userId}, Assessment ${assessment.id}`);
-    
+
     delete sessions[sessionId]; // Clear session after completion
-    res.json({ ...result, assessmentId: assessment.id, userId });
+    // Short-lived token authorising the dashboard-image upload that follows.
+    const uploadToken = signToken({ assessmentId: assessment.id, email: metadata.email, exp: Date.now() + 30 * 60 * 1000 });
+    res.json({ ...result, assessmentId: assessment.id, userId, uploadToken });
   } catch (error) {
     console.error('Error saving to Supabase:', error);
     res.status(500).json({ error: 'Failed to save assessment' });
@@ -202,34 +271,50 @@ app.get('/api/assessment/:assessmentId', async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 });
-// Upload PDF to Supabase Storage
-app.post('/api/upload-pdf', async (req, res) => {
-  const { email, assessmentId, pdfBase64, filename } = req.body;
-  
-  if (!email || !pdfBase64 || !filename) {
-    return res.status(400).json({ error: 'Missing required fields: email, pdfBase64, filename' });
+// Upload PDF to Supabase Storage. Gated to paid sessions (the report is the
+// paid item), rate-limited, size-capped and path-sanitised.
+app.post('/api/upload-pdf', sensitiveLimiter, async (req, res) => {
+  const { email, assessmentId, pdfBase64, filename, sessionId } = req.body || {};
+
+  if (!isEmail(email) || !isStr(pdfBase64, 20_000_000) || !isStr(filename, 200)) {
+    return res.status(400).json({ error: 'Missing or invalid fields' });
   }
-  
+
+  // Authorisation: only a session whose payment is verified may store a report.
   try {
-    // Convert base64 to buffer
+    const { data: paidRow } = await supabase
+      .from('payment_sessions')
+      .select('paid')
+      .eq('session_id', sessionId || '')
+      .eq('paid', true)
+      .limit(1);
+    if (!Array.isArray(paidRow) || paidRow.length === 0) {
+      return res.status(402).json({ error: 'Payment required' });
+    }
+  } catch {
+    return res.status(402).json({ error: 'Payment required' });
+  }
+
+  try {
     const pdfBuffer = Buffer.from(pdfBase64, 'base64');
-    
-    // Generate unique storage path
+    if (pdfBuffer.length > 10 * 1024 * 1024) {
+      return res.status(413).json({ error: 'File too large' });
+    }
+
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const storagePath = `${email.replace('@', '_at_')}/${timestamp}_${filename}`;
-    
-    // Upload to Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabase
+    const storagePath = `${safeSegment(email.replace('@', '_at_'))}/${timestamp}_${safeFilename(filename, 'report.pdf')}`;
+
+    const { error: uploadError } = await supabase
       .storage
       .from('pdf-reports')
       .upload(storagePath, pdfBuffer, {
         contentType: 'application/pdf',
         upsert: false,
       });
-    
+
     if (uploadError) {
       console.error('❌ PDF upload error:', uploadError);
-      return res.status(500).json({ error: 'Failed to upload PDF', details: uploadError.message });
+      return res.status(500).json({ error: 'Failed to upload PDF' });
     }
     
     // Get public URL
@@ -320,7 +405,7 @@ app.post('/api/razorpay/order', async (req, res) => {
     const order = await rzpRes.json();
     if (!rzpRes.ok || !order.id) {
       console.error('❌ Razorpay order error:', order);
-      return res.status(502).json({ error: 'Failed to create order', details: order?.error?.description });
+      return res.status(502).json({ error: 'Failed to create order' });
     }
 
     // Persist the order → session link so /payment-status can recover the
@@ -417,17 +502,27 @@ app.get('/api/session/:sessionId/payment', async (req, res) => {
 });
 
 // Upload a rendered JPG of the dashboard and save its URL on the assessment.
-app.post('/api/upload-dashboard-image', async (req, res) => {
-  const { email, assessmentId, imageBase64, filename } = req.body || {};
+// Authorised by the short-lived upload token issued at /api/complete.
+app.post('/api/upload-dashboard-image', sensitiveLimiter, async (req, res) => {
+  const { email, assessmentId, imageBase64, filename, token } = req.body || {};
 
-  if (!email || !imageBase64 || !filename) {
-    return res.status(400).json({ error: 'Missing required fields: email, imageBase64, filename' });
+  if (!isEmail(email) || !isStr(imageBase64, 20_000_000) || !isStr(filename, 200)) {
+    return res.status(400).json({ error: 'Missing or invalid fields' });
+  }
+
+  // Token must be valid, unexpired, and issued for this email + assessment.
+  const payload = verifyToken(token);
+  if (!payload || payload.email !== email || String(payload.assessmentId) !== String(assessmentId)) {
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
   try {
     const imageBuffer = Buffer.from(imageBase64, 'base64');
+    if (imageBuffer.length > 8 * 1024 * 1024) {
+      return res.status(413).json({ error: 'File too large' });
+    }
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const storagePath = `${email.replace('@', '_at_')}/${timestamp}_${filename}`;
+    const storagePath = `${safeSegment(email.replace('@', '_at_'))}/${timestamp}_${safeFilename(filename, 'dashboard.jpg')}`;
 
     const { error: uploadError } = await supabase
       .storage
@@ -436,7 +531,7 @@ app.post('/api/upload-dashboard-image', async (req, res) => {
 
     if (uploadError) {
       console.error('❌ Dashboard image upload error:', uploadError);
-      return res.status(500).json({ error: 'Failed to upload image', details: uploadError.message });
+      return res.status(500).json({ error: 'Failed to upload image' });
     }
 
     const { data: urlData } = supabase.storage.from('dashboard-images').getPublicUrl(storagePath);
@@ -461,12 +556,12 @@ app.post('/api/upload-dashboard-image', async (req, res) => {
 
 // ============ ADMIN ============
 
-// List every assessment with its user, newest first. Protected by ADMIN_KEY
-// (passed as ?key= or an x-admin-key header).
-app.get('/api/admin/assessments', async (req, res) => {
-  const adminKey = process.env.ADMIN_KEY;
-  const provided = req.query.key || req.headers['x-admin-key'];
-  if (!adminKey || provided !== adminKey) {
+// List every assessment with its user, newest first. Protected by ADMIN_KEY —
+// prefer the x-admin-key header (query is accepted for backwards compatibility
+// but leaks into logs). Rate-limited and compared in constant time.
+app.get('/api/admin/assessments', sensitiveLimiter, async (req, res) => {
+  const provided = req.headers['x-admin-key'] || req.query.key || '';
+  if (!ADMIN_KEY || !safeEqual(provided, ADMIN_KEY)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 

@@ -624,14 +624,18 @@ function App() {
 
   /* ── Admin view: ?admin=KEY loads every user's saved assessment ── */
   useEffect(() => {
-    const key = new URLSearchParams(window.location.search).get('admin');
+    const params = new URLSearchParams(window.location.search);
+    const key = params.get('admin');
     if (!key) return;
     setAdminMode(true);
     setIsLoading(false);
     setAdminLoading(true);
+    // Remove the key from the address bar so it isn't left in history/Referer.
+    params.delete('admin');
+    window.history.replaceState({}, document.title, window.location.pathname + (params.toString() ? `?${params}` : ''));
     (async () => {
       try {
-        const res = await fetch(`${API_URL}/api/admin/assessments?key=${encodeURIComponent(key)}`);
+        const res = await fetch(`${API_URL}/api/admin/assessments`, { headers: { 'x-admin-key': key } });
         if (!res.ok) {
           setAdminError(res.status === 401 ? 'Invalid admin key.' : 'Failed to load assessments.');
         } else {
@@ -840,7 +844,7 @@ function App() {
         console.log('✅ Assessment saved to Supabase! ID:', data.assessmentId, 'User ID:', data.userId);
         setSupabaseSaveStatus('saved');
         // Capture a JPG of the rendered dashboard and store it (payment-independent).
-        captureAndUploadDashboard(data.assessmentId);
+        captureAndUploadDashboard(data.assessmentId, data.uploadToken);
       } else {
         console.error('❌ Supabase save returned no assessmentId:', data);
         setSupabaseSaveStatus('error');
@@ -852,7 +856,7 @@ function App() {
   };
 
   /* ── Snapshot the on-screen dashboard to a JPG and upload it to Supabase ── */
-  const captureAndUploadDashboard = async (assessmentId: number) => {
+  const captureAndUploadDashboard = async (assessmentId: number, uploadToken?: string) => {
     if (!metadata) return;
     // Let the dashboard finish its entrance animation before capturing.
     await new Promise((r) => setTimeout(r, 900));
@@ -886,7 +890,7 @@ function App() {
       const res = await fetch(`${API_URL}/api/upload-dashboard-image`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: metadata.email, assessmentId, imageBase64, filename }),
+        body: JSON.stringify({ email: metadata.email, assessmentId, imageBase64, filename, token: uploadToken }),
       });
       const data = await res.json();
       if (data.success) console.log('✅ Dashboard image stored:', data.url);
@@ -916,7 +920,7 @@ function App() {
       const res = await fetch(`${API_URL}/api/upload-pdf`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: metadata.email, assessmentId: null, pdfBase64: base64, filename }),
+        body: JSON.stringify({ email: metadata.email, assessmentId: null, pdfBase64: base64, filename, sessionId: serverSessionId }),
       });
       const data = await res.json();
       if (data.success) {
