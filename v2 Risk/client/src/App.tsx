@@ -5,8 +5,9 @@ import { generateUniqueAssessment, calculateRiskScore, getBenchmarkData, DOMAINS
 import { generatePDF } from './utils/pdfGenerator';
 import CursorField from './CursorField';
 import { supabase } from './supabaseClient';
-import { startRazorpayCheckout } from './utils/razorpayPayment';
-import type { RazorpayResult } from './utils/razorpayPayment';
+// Payment gateway temporarily disabled — Razorpay checkout is commented out.
+// import { startRazorpayCheckout } from './utils/razorpayPayment';
+// import type { RazorpayResult } from './utils/razorpayPayment';
 import './index.css';
 
 const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:3001' : window.location.origin);
@@ -15,18 +16,18 @@ const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'l
 // redirect the top-level window here with the Razorpay identifiers appended; the
 // Hub forwards the user to our /payment-status endpoint for verification.
 // The base carries ?app_id=risk, which identifies this app in the Hub's routing.
-const PAYMENT_HUB_URL = import.meta.env.VITE_PAYMENT_HUB_URL || 'https://payment-t1ag.onrender.com/?app_id=risk';
+// const PAYMENT_HUB_URL = import.meta.env.VITE_PAYMENT_HUB_URL || 'https://payment-t1ag.onrender.com/?app_id=risk';
 
 /** Append the Razorpay identifiers to the Payment Hub base URL. */
-const buildHubRedirectUrl = (r: RazorpayResult): string => {
-  const sep = PAYMENT_HUB_URL.includes('?') ? '&' : '?';
-  const params = new URLSearchParams({
-    razorpay_payment_id: r.razorpay_payment_id,
-    razorpay_order_id: r.razorpay_order_id,
-    razorpay_signature: r.razorpay_signature,
-  });
-  return `${PAYMENT_HUB_URL}${sep}${params.toString()}`;
-};
+// const buildHubRedirectUrl = (r: RazorpayResult): string => {
+//   const sep = PAYMENT_HUB_URL.includes('?') ? '&' : '?';
+//   const params = new URLSearchParams({
+//     razorpay_payment_id: r.razorpay_payment_id,
+//     razorpay_order_id: r.razorpay_order_id,
+//     razorpay_signature: r.razorpay_signature,
+//   });
+//   return `${PAYMENT_HUB_URL}${sep}${params.toString()}`;
+// };
 
 type Step = 'onboarding' | 'assessment' | 'results' | 'retest';
 type BusinessStage = 'pre-seed' | 'seed' | 'series-a' | 'series-b' | 'series-c+';
@@ -953,34 +954,44 @@ function App() {
       return;
     }
 
-    // Not paid yet → run Razorpay checkout.
+    // Payment gateway temporarily disabled — deliver the report without checkout.
     setPaymentError(null);
-    await startRazorpayCheckout({
-      apiUrl: API_URL,
-      name: metadata.name,
-      email: metadata.email,
-      companyName: metadata.companyName,
-      sessionId: serverSessionId,
-      assessmentId: null,
-      // User closed the modal without paying — stay on the dashboard.
-      onDismiss: () => {
-        setPdfUploadStatus('idle');
-      },
-      // Payment could not be started / failed — surface an inline message.
-      onFailure: (reason) => {
-        console.warn('⚠️ Payment failed:', reason);
-        setPaymentError('Payment could not be completed. Please try again.');
-      },
-      // Success handler runs in our page context: save the dashboard so it
-      // survives the round-trip, then redirect the top-level window to the
-      // external Payment Hub with the Razorpay identifiers appended.
-      onSuccess: (response) => {
-        try {
-          localStorage.setItem('risk_result_snapshot', JSON.stringify({ metadata, result }));
-        } catch { /* ignore quota errors */ }
-        window.location.href = buildHubRedirectUrl(response);
-      },
-    });
+    setPaid(true);
+    setShowEarlyBirdsPopup(true);
+    try {
+      await generateAndUploadReport();
+    } catch (err) {
+      console.error('❌ Report preparation failed:', err);
+    }
+
+    // Not paid yet → run Razorpay checkout.
+    // setPaymentError(null);
+    // await startRazorpayCheckout({
+    //   apiUrl: API_URL,
+    //   name: metadata.name,
+    //   email: metadata.email,
+    //   companyName: metadata.companyName,
+    //   sessionId: serverSessionId,
+    //   assessmentId: null,
+    //   // User closed the modal without paying — stay on the dashboard.
+    //   onDismiss: () => {
+    //     setPdfUploadStatus('idle');
+    //   },
+    //   // Payment could not be started / failed — surface an inline message.
+    //   onFailure: (reason) => {
+    //     console.warn('⚠️ Payment failed:', reason);
+    //     setPaymentError('Payment could not be completed. Please try again.');
+    //   },
+    //   // Success handler runs in our page context: save the dashboard so it
+    //   // survives the round-trip, then redirect the top-level window to the
+    //   // external Payment Hub with the Razorpay identifiers appended.
+    //   onSuccess: (response) => {
+    //     try {
+    //       localStorage.setItem('risk_result_snapshot', JSON.stringify({ metadata, result }));
+    //     } catch { /* ignore quota errors */ }
+    //     window.location.href = buildHubRedirectUrl(response);
+    //   },
+    // });
   };
 
   /* ── Straight-lining detection ── */
