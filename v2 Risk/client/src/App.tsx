@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react';
 // @ts-ignore
 import { generateUniqueAssessment, calculateRiskScore, getBenchmarkData, DOMAINS } from './utils/riskEngine';
 // @ts-ignore
-import { generatePDF } from './utils/pdfGenerator';
-// @ts-ignore
 import { deriveReportMetrics } from './utils/reportMetrics';
-// @ts-ignore
-import { downloadRiskReport } from './utils/riskReportHtml';
+// The report generators (riskReportHtml / reportPdf) pull in the embedded fonts
+// + html2canvas, so they're lazy-loaded on demand inside the handlers below to
+// keep the initial bundle lean. The delivered PDF uses the finalized template
+// design and replaces the old hand-drawn jsPDF report (pdfGenerator.js).
 import CursorField from './CursorField';
 import { supabase } from './supabaseClient';
 // Payment gateway temporarily disabled — Razorpay checkout is commented out.
@@ -909,8 +909,10 @@ function App() {
   const generateAndUploadReport = async (): Promise<string | null> => {
     if (!result || !metadata) return null;
     setPdfUploadStatus('generating');
-    // Generate the PDF (this also triggers a local download via doc.save).
-    const { blob, filename } = await generatePDF(result, metadata);
+    // Generate the PDF (template design, rasterized; also triggers a local
+    // download via doc.save). Uses the same real data as the dashboard.
+    const { generateReportPdf } = await import('./utils/reportPdf');
+    const { blob, filename } = await generateReportPdf(result, metadata);
     console.log('✅ PDF generated locally:', filename);
 
     setPdfUploadStatus('uploading');
@@ -945,9 +947,10 @@ function App() {
 
   /* ── PDF button: download if already paid, otherwise open checkout ── */
   /* ── Download the designed HTML report (template layout, real dashboard data) ── */
-  const handleDownloadHtmlReport = () => {
+  const handleDownloadHtmlReport = async () => {
     if (!result || !metadata) return;
     try {
+      const { downloadRiskReport } = await import('./utils/riskReportHtml');
       downloadRiskReport(result, metadata);
     } catch (err) {
       console.error('❌ HTML report generation failed:', err);

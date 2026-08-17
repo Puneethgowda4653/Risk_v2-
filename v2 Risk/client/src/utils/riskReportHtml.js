@@ -16,6 +16,7 @@
 // this generator works both for AI-augmented results and plain engine output.
 
 import { REPORT_CSS, LOGO_DATA_URI, WAVE_SVG } from './reportAssets';
+import { REPORT_FONTS_CSS } from './reportFonts';
 import {
   deriveReportMetrics,
   getScoreInterpretation,
@@ -299,6 +300,8 @@ function dimensionPages(m) {
   const chunks = [];
   for (let i = 0; i < m.sorted.length; i += perPage) chunks.push(m.sorted.slice(i, i + perPage));
   const total = chunks.length;
+  // Returns an ARRAY of page strings (one per breakdown page) so the PDF
+  // renderer can rasterize each page individually.
   return chunks
     .map((chunk, pi) => {
       const blocks = chunk.map(([id, d], i) => dimensionBlock(id, d, pi * perPage + i, m)).join('');
@@ -312,8 +315,7 @@ function dimensionPages(m) {
   ${blocks}
   ${ftr}
 </div>`;
-    })
-    .join('');
+    });
 }
 
 // ── STRENGTHS, GROWTH & WATCH-OUTS ───────────────────────────────────────────
@@ -649,14 +651,22 @@ function aboutPage() {
 }
 
 // ── PUBLIC API ───────────────────────────────────────────────────────────────
-// Returns the full HTML document string for the risk report.
-export function generateRiskReportHTML(result, metadata) {
+
+// Shared <head> markup used by both the full-document HTML export and the
+// per-page iframes the PDF renderer mounts. Fonts are base64-EMBEDDED (no
+// external <link>): this keeps the report self-contained and, crucially, stops
+// html2canvas from stalling on remote font fetches during PDF rasterization.
+export const REPORT_HEAD = `<meta charset="UTF-8">
+<style>${REPORT_FONTS_CSS}</style>
+<style>${REPORT_CSS}</style>`;
+
+// Returns a FLAT array of page HTML strings (one entry per printed page).
+// Both the HTML export and the PDF renderer build on this so they stay in sync.
+export function buildReportPages(result, metadata) {
   const m = deriveReportMetrics(result, metadata);
 
-  // Page numbering after the two fixed breakdown-adjacent sections is dynamic
-  // because the domain breakdown can span multiple pages for any headcount of
-  // domains. We compute the running page number so the "NN / 16" chrome stays
-  // sensible even when the domain list is long or short.
+  // Page numbering after the domain breakdown is dynamic because the breakdown
+  // can span multiple pages for any headcount of domains.
   const dimPageCount = Math.max(1, Math.ceil(m.sorted.length / 5));
   let p = 5 + dimPageCount; // first page after the dimension breakdown pages
   const strengthsNum = String(p++).padStart(2, '0');
@@ -665,12 +675,12 @@ export function generateRiskReportHTML(result, metadata) {
   const detailNum = String(p++).padStart(2, '0');
   const trackingNum = String(p++).padStart(2, '0');
 
-  const body = [
+  return [
     coverPage(metadata),
     contentsPage(),
     suitePage(),
     execSummaryPage(m, result, metadata),
-    dimensionPages(m),
+    ...dimensionPages(m), // array of breakdown pages
     strengthsPage(m, strengthsNum),
     archetypePage(m, metadata, archetypeNum),
     actionPlanPage(m, actionNum),
@@ -678,16 +688,17 @@ export function generateRiskReportHTML(result, metadata) {
     trackingPage(m, trackingNum),
     disclaimerPage(),
     aboutPage(),
-  ].join('\n');
+  ];
+}
 
+// Returns the full standalone HTML document string for the risk report.
+export function generateRiskReportHTML(result, metadata) {
+  const body = buildReportPages(result, metadata).join('\n');
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
 <title>Risk Assessment Report — ${esc(metadata.companyName || metadata.name || 'Infopace')}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<style>${REPORT_CSS}</style>
+${REPORT_HEAD}
 </head>
 <body>
 ${body}
