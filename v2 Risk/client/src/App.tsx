@@ -2473,9 +2473,6 @@ function App() {
               {metadata.name.charAt(0).toUpperCase()}
             </div>
             <span style={{ color: 'white', fontSize: 9, fontWeight: 600 }}>{metadata.name.split(' ')[0]}</span>
-            <button className="db-btn" onClick={handleDownloadPDF} disabled={pdfUploadStatus === 'generating' || pdfUploadStatus === 'uploading'} style={{ background: pdfUploadStatus === 'done' ? 'rgba(34,197,94,.85)' : pdfUploadStatus === 'error' ? 'rgba(239,68,68,.85)' : pdfUploadStatus === 'generating' || pdfUploadStatus === 'uploading' ? 'rgba(99,102,241,.7)' : 'rgba(255,255,255,.15)', color: 'white', transition: 'all .3s ease' }}>
-              {pdfUploadStatus === 'generating' ? '⏳ Generating…' : pdfUploadStatus === 'uploading' ? '☁️ Uploading…' : pdfUploadStatus === 'done' ? '✅ Saved!' : pdfUploadStatus === 'error' ? '❌ Failed' : paid ? '📄 PDF' : '🔒 Unlock PDF'}
-            </button>
             <button className="db-btn" onClick={handleDownloadReportPdf} disabled={reportPdfBusy} style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>{reportPdfBusy ? '⏳ Generating…' : '📄 Download PDF'}</button>
             <button className="db-btn" onClick={handleReset} style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>↺ Retake</button>
           </div>
