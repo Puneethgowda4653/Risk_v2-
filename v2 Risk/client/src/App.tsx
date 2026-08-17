@@ -2387,7 +2387,6 @@ function App() {
     const rm = deriveReportMetrics(result, metadata);
     const domains = rm.domains as [string, { score: number; name: string; weight: number; tier: number }][];
     const sorted = rm.sorted as typeof domains;
-    const sortedAsc = rm.sortedAsc as typeof domains;
     const criticalFlags = rm.criticalFlags;
     const orangeFlags = rm.orangeFlags;
     const highPerformers = rm.highPerformers;
