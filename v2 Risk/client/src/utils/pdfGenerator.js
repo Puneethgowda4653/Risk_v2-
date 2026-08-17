@@ -1,14 +1,7 @@
 import jsPDF from 'jspdf';
-
-// Helper function to get score interpretation
-const getScoreInterpretation = (score) => {
-  if (score <= 25) return { label: 'MINIMAL RISK', description: 'Strong risk controls and governance in place' };
-  if (score <= 40) return { label: 'LOW RISK', description: 'Adequate risk management with minor gaps' };
-  if (score <= 55) return { label: 'MODERATE RISK', description: 'Significant risk areas requiring attention' };
-  if (score <= 70) return { label: 'HIGH RISK', description: 'Critical vulnerabilities present' };
-  if (score <= 85) return { label: 'CRITICAL RISK', description: 'Severe exposure across multiple domains' };
-  return { label: 'EXISTENTIAL RISK', description: 'Systemic threat to business viability' };
-};
+// Score-band interpretation now lives in the shared reportMetrics module so the
+// PDF report, the HTML report and the dashboard all use one identical mapping.
+import { getScoreInterpretation } from './reportMetrics';
 
 // Helper to wrap text
 const wrapText = (doc, text, x, y, maxWidth, lineHeight = 5) => {

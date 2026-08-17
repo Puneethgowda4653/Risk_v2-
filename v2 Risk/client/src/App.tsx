@@ -3,6 +3,10 @@ import { useState, useEffect } from 'react';
 import { generateUniqueAssessment, calculateRiskScore, getBenchmarkData, DOMAINS } from './utils/riskEngine';
 // @ts-ignore
 import { generatePDF } from './utils/pdfGenerator';
+// @ts-ignore
+import { deriveReportMetrics } from './utils/reportMetrics';
+// @ts-ignore
+import { downloadRiskReport } from './utils/riskReportHtml';
 import CursorField from './CursorField';
 import { supabase } from './supabaseClient';
 // Payment gateway temporarily disabled — Razorpay checkout is commented out.
@@ -940,6 +944,16 @@ function App() {
   };
 
   /* ── PDF button: download if already paid, otherwise open checkout ── */
+  /* ── Download the designed HTML report (template layout, real dashboard data) ── */
+  const handleDownloadHtmlReport = () => {
+    if (!result || !metadata) return;
+    try {
+      downloadRiskReport(result, metadata);
+    } catch (err) {
+      console.error('❌ HTML report generation failed:', err);
+    }
+  };
+
   const handleDownloadPDF = async () => {
     if (!result || !metadata) return;
 
@@ -2368,13 +2382,16 @@ function App() {
   ══════════════════════════════════════════════════════════════════════════ */
   if (step === 'results' && result) {
     const benchmark = getBenchmarkData(metadata, result.score, result.domainScores);
-    const domains = Object.entries(result.domainScores) as [string, { score: number; name: string; weight: number; tier: number }][];
-    const sorted = [...domains].sort(([, a], [, b]) => b.score - a.score);
-    const sortedAsc = [...domains].sort(([, a], [, b]) => a.score - b.score);
-    const criticalFlags = result.flags.filter((f: any) => f.type === 'CRITICAL').length;
-    const orangeFlags = result.flags.filter((f: any) => f.type === 'ORANGE').length;
-    const highPerformers = domains.filter(([, d]) => d.score <= 30).length;
-    const riskExposure = 100 - result.score;
+    // All numeric KPIs come from the shared reportMetrics module so the
+    // dashboard and the generated reports (PDF + HTML) can never drift apart.
+    const rm = deriveReportMetrics(result, metadata);
+    const domains = rm.domains as [string, { score: number; name: string; weight: number; tier: number }][];
+    const sorted = rm.sorted as typeof domains;
+    const sortedAsc = rm.sortedAsc as typeof domains;
+    const criticalFlags = rm.criticalFlags;
+    const orangeFlags = rm.orangeFlags;
+    const highPerformers = rm.highPerformers;
+    const riskExposure = rm.riskExposure;
 
     /* radar data – all domains for the spider chart with benchmark */
     const radarDomains = domains.slice(0, 10);
@@ -2382,9 +2399,9 @@ function App() {
     const radarScores = radarDomains.map(([, d]) => d.score);
     const radarBench = radarDomains.map(([, d]) => Math.min(100, d.score * (0.8 + Math.random() * 0.4)));
 
-    /* best & worst domains */
-    const strongest = sortedAsc[0];
-    const weakest = sorted[0];
+    /* best & worst domains (shared source of truth) */
+    const strongest = rm.strongest as typeof domains[number];
+    const weakest = rm.weakest as typeof domains[number];
 
     /* heat map – pick 8 domains spread across score range for color variety */
     const heatMapDomains = (() => {
@@ -2403,11 +2420,9 @@ function App() {
     const month1Actions = sorted.slice(0, 2).map(([, d]) => `Fix ${d.name.toLowerCase()}`);
     const month2Actions = sorted.slice(2, 4).map(([, d]) => `Improve ${d.name.toLowerCase().split(' ')[0]} areas`);
 
-    /* validity score */
-    const validityScore = Math.min(99, Math.round(85 + (domains.length / 18) * 14));
-
-    /* confidence label */
-    const confidenceLabel = validityScore > 90 ? 'High Confidence' : validityScore > 70 ? 'Medium Confidence' : 'Low Confidence';
+    /* validity score + confidence label (shared source of truth) */
+    const validityScore = rm.validityScore;
+    const confidenceLabel = rm.confidenceLabel;
 
     return (
       <div id="risk-dashboard-capture" className="res-root" style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans', system-ui, sans-serif", background: '#f4f5f7', overflow: 'hidden' }}>
@@ -2455,7 +2470,7 @@ function App() {
             <button className="db-btn" onClick={handleDownloadPDF} disabled={pdfUploadStatus === 'generating' || pdfUploadStatus === 'uploading'} style={{ background: pdfUploadStatus === 'done' ? 'rgba(34,197,94,.85)' : pdfUploadStatus === 'error' ? 'rgba(239,68,68,.85)' : pdfUploadStatus === 'generating' || pdfUploadStatus === 'uploading' ? 'rgba(99,102,241,.7)' : 'rgba(255,255,255,.15)', color: 'white', transition: 'all .3s ease' }}>
               {pdfUploadStatus === 'generating' ? '⏳ Generating…' : pdfUploadStatus === 'uploading' ? '☁️ Uploading…' : pdfUploadStatus === 'done' ? '✅ Saved!' : pdfUploadStatus === 'error' ? '❌ Failed' : paid ? '📄 PDF' : '🔒 Unlock PDF'}
             </button>
-            <button className="db-btn db-btn-hide" style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>📋 Plan</button>
+            <button className="db-btn db-btn-hide" onClick={handleDownloadHtmlReport} style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>📊 Report</button>
             <button className="db-btn" onClick={handleReset} style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>↺ Retake</button>
           </div>
         </div>
