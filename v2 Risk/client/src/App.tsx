@@ -518,6 +518,7 @@ function App() {
   const [adminError, setAdminError] = useState<string | null>(null);
   const [supabaseSaveStatus, setSupabaseSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [pdfUploadStatus, setPdfUploadStatus] = useState<'idle' | 'generating' | 'uploading' | 'done' | 'error'>('idle');
+  const [reportPdfBusy, setReportPdfBusy] = useState(false);
   const [showEarlyBirdsPopup, setShowEarlyBirdsPopup] = useState(false);
   const [authMode, setAuthMode] = useState<'signup' | 'login'>('signup');
   const [loginEmail, setLoginEmail] = useState('');
@@ -946,14 +947,17 @@ function App() {
   };
 
   /* ── PDF button: download if already paid, otherwise open checkout ── */
-  /* ── Download the designed HTML report (template layout, real dashboard data) ── */
-  const handleDownloadHtmlReport = async () => {
-    if (!result || !metadata) return;
+  /* ── Download the designed report as a PDF (template layout, real data) ── */
+  const handleDownloadReportPdf = async () => {
+    if (!result || !metadata || reportPdfBusy) return;
+    setReportPdfBusy(true);
     try {
-      const { downloadRiskReport } = await import('./utils/riskReportHtml');
-      downloadRiskReport(result, metadata);
+      const { generateReportPdf } = await import('./utils/reportPdf');
+      await generateReportPdf(result, metadata); // builds + triggers the .pdf download
     } catch (err) {
-      console.error('❌ HTML report generation failed:', err);
+      console.error('❌ PDF report generation failed:', err);
+    } finally {
+      setReportPdfBusy(false);
     }
   };
 
@@ -2472,7 +2476,7 @@ function App() {
             <button className="db-btn" onClick={handleDownloadPDF} disabled={pdfUploadStatus === 'generating' || pdfUploadStatus === 'uploading'} style={{ background: pdfUploadStatus === 'done' ? 'rgba(34,197,94,.85)' : pdfUploadStatus === 'error' ? 'rgba(239,68,68,.85)' : pdfUploadStatus === 'generating' || pdfUploadStatus === 'uploading' ? 'rgba(99,102,241,.7)' : 'rgba(255,255,255,.15)', color: 'white', transition: 'all .3s ease' }}>
               {pdfUploadStatus === 'generating' ? '⏳ Generating…' : pdfUploadStatus === 'uploading' ? '☁️ Uploading…' : pdfUploadStatus === 'done' ? '✅ Saved!' : pdfUploadStatus === 'error' ? '❌ Failed' : paid ? '📄 PDF' : '🔒 Unlock PDF'}
             </button>
-            <button className="db-btn db-btn-hide" onClick={handleDownloadHtmlReport} style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>📊 Report</button>
+            <button className="db-btn" onClick={handleDownloadReportPdf} disabled={reportPdfBusy} style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>{reportPdfBusy ? '⏳ Generating…' : '📄 Download PDF'}</button>
             <button className="db-btn" onClick={handleReset} style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>↺ Retake</button>
           </div>
         </div>
