@@ -946,16 +946,17 @@ function App() {
     }
   };
 
-  /* ── PDF button: download if already paid, otherwise open checkout ── */
-  /* ── Download the designed report as a PDF (template layout, real data) ── */
+  /* ── Download the designed report as a PDF (template layout, real data) ──
+     Also stores a copy of every generated report in our database: this calls
+     generateAndUploadReport(), which triggers the local .pdf download AND
+     uploads the same PDF to Supabase (pdf-reports storage + pdf_reports table). */
   const handleDownloadReportPdf = async () => {
     if (!result || !metadata || reportPdfBusy) return;
     setReportPdfBusy(true);
     try {
-      const { generateReportPdf } = await import('./utils/reportPdf');
-      await generateReportPdf(result, metadata); // builds + triggers the .pdf download
+      await generateAndUploadReport(); // local download + persist a copy to the DB
     } catch (err) {
-      console.error('❌ PDF report generation failed:', err);
+      console.error('❌ PDF report generation/upload failed:', err);
     } finally {
       setReportPdfBusy(false);
     }
