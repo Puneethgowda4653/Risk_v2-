@@ -2492,9 +2492,17 @@ function App() {
           .db-btn { padding:5px 11px; border-radius:16px; font-size:9px; font-weight:600; font-family:inherit; cursor:pointer; border:none; transition:all .2s; display:inline-flex; align-items:center; gap:4px; }
           .db-btn:hover { transform:translateY(-1px); box-shadow:0 2px 6px rgba(0,0,0,.18); }
           .res-kpi-grid { grid-template-columns: repeat(5, 1fr); }
-          .res-main-grid { grid-template-columns: 1.15fr 1fr 1fr 1fr; }
+          .res-main-grid { grid-template-columns: 1.15fr 1fr 1fr 1fr; grid-template-rows: 170px minmax(0, 1fr); }
+          .g-radar  { grid-column: 1; grid-row: 1 / span 2; }
+          .g-trend  { grid-column: 2; grid-row: 1 / span 2; }
+          .g-health { grid-column: 3; grid-row: 1; }
+          .g-heat   { grid-column: 4; grid-row: 1; }
+          .g-bw     { grid-column: 3; grid-row: 2; }
+          .g-rstack { grid-column: 4; grid-row: 2; }
           @media (max-width: 900px) {
-            .res-main-grid { grid-template-columns: 1fr 1fr !important; }
+            .res-main-grid { grid-template-columns: 1fr 1fr !important; grid-template-rows: none !important; }
+            .g-radar, .g-trend, .g-health, .g-heat, .g-bw, .g-rstack { grid-column: auto !important; grid-row: auto !important; }
+            .res-main-grid > * { min-height: 240px; }
           }
           @media (max-width: 768px) {
             .res-root { height: auto !important; overflow: auto !important; }
@@ -2502,14 +2510,13 @@ function App() {
             .res-topbar-btns { flex-wrap: wrap; gap: 3px !important; }
             .res-kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
             .res-main-grid { grid-template-columns: 1fr !important; flex: unset !important; }
-            .res-col { min-height: unset !important; }
-            .res-col > * { flex: unset !important; min-height: 200px !important; }
+            .res-main-grid > * { min-height: 220px !important; }
             .res-body { padding: 10px !important; overflow: auto !important; flex: unset !important; }
             .db-btn-hide { display: none !important; }
           }
           @media (max-width: 480px) {
             .res-kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
-            .res-col > * { min-height: 180px !important; }
+            .res-main-grid > * { min-height: 200px !important; }
           }
         `}</style>
 
@@ -2561,7 +2568,7 @@ function App() {
           <div className="res-main-grid" style={{ display: 'grid', gridTemplateColumns: '1.15fr 1fr 1fr 1fr', gap: 8, flex: 1, minHeight: 0 }}>
 
             {/* ─── COLUMN 1: Domain Performance Radar ─── */}
-            <div className="res-col" style={{ display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 }}>
+            <div className="res-col g-radar" style={{ display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 }}>
               <div className="dcard fi" onClick={() => openModal('Domain Performance Radar – All Domains', 'Full radar breakdown across all 18 risk domains')} style={{ flex: 1, animationDelay: '.08s', display: 'flex', flexDirection: 'column', minHeight: 0, cursor: 'pointer', transition: 'box-shadow .2s, background .3s' }}
                 onMouseEnter={e => e.currentTarget.style.boxShadow = `0 0 0 2px ${dark ? '#818cf8' : '#6366f1'}`}
                 onMouseLeave={e => e.currentTarget.style.boxShadow = T.cardShadow}>
@@ -2617,7 +2624,7 @@ function App() {
             </div>
 
             {/* ─── COLUMN 2: Domain Performance Trend ─── */}
-            <div className="res-col" style={{ display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 }}>
+            <div className="res-col g-trend" style={{ display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 }}>
               <div className="dcard fi" onClick={() => openModal('Domain Performance Trend – Top Domains', 'Projected 6-month trajectory toward current domain scores')} style={{ flex: 1, animationDelay: '.12s', display: 'flex', flexDirection: 'column', minHeight: 0, cursor: 'pointer', transition: 'box-shadow .2s, background .3s' }}
                 onMouseEnter={e => e.currentTarget.style.boxShadow = `0 0 0 2px ${dark ? '#818cf8' : '#6366f1'}`}
                 onMouseLeave={e => e.currentTarget.style.boxShadow = T.cardShadow}>
@@ -2663,10 +2670,8 @@ function App() {
               </div>
             </div>
 
-            {/* ─── COLUMN 3: Overall Health + Best/Worst + Benchmark ─── */}
-            <div className="res-col" style={{ display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 }}>
-              {/* Overall Health Gauge */}
-              <div className="dcard fi" onClick={() => openModal('Overall Health – Score Per Domain', `Composite score: ${result.score}% · All 18 domains ranked`)} style={{ animationDelay: '.1s', cursor: 'pointer', transition: 'box-shadow .2s, background .3s' }}
+            {/* ─── COLUMN 3, ROW 1: Overall Health ─── */}
+            <div className="dcard fi g-health" onClick={() => openModal('Overall Health – Score Per Domain', `Composite score: ${result.score}% · All 18 domains ranked`)} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: 0, animationDelay: '.1s', cursor: 'pointer', transition: 'box-shadow .2s, background .3s' }}
                 onMouseEnter={e => e.currentTarget.style.boxShadow = `0 0 0 2px ${dark ? '#818cf8' : '#6366f1'}`}
                 onMouseLeave={e => e.currentTarget.style.boxShadow = T.cardShadow}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: T.title }}>Overall Health</div>
@@ -2693,8 +2698,8 @@ function App() {
                 </div>
               </div>
 
-              {/* Best & Worst Domain + vs Industry Benchmark */}
-              <div className="dcard fi" onClick={() => openModal('Best & Worst – Full Domain Ranking', 'Complete ranking from lowest risk to highest risk')} style={{ flex: 1, animationDelay: '.15s', minHeight: 0, display: 'flex', flexDirection: 'column', cursor: 'pointer', transition: 'box-shadow .2s, background .3s' }}
+            {/* ─── COLUMN 3, ROW 2: Best & Worst + vs Industry Benchmark ─── */}
+            <div className="dcard fi g-bw" onClick={() => openModal('Best & Worst – Full Domain Ranking', 'Complete ranking from lowest risk to highest risk')} style={{ animationDelay: '.15s', minHeight: 0, display: 'flex', flexDirection: 'column', cursor: 'pointer', transition: 'box-shadow .2s, background .3s' }}
                 onMouseEnter={e => e.currentTarget.style.boxShadow = `0 0 0 2px ${dark ? '#34d399' : '#10b981'}`}
                 onMouseLeave={e => e.currentTarget.style.boxShadow = T.cardShadow}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: T.title, marginBottom: 5 }}>Best &amp; Worst Domain</div>
@@ -2715,7 +2720,7 @@ function App() {
                   </div>
                 </div>
                 <div style={{ fontSize: 10, fontWeight: 700, color: T.title, margin: '8px 0 2px' }}>vs Industry Benchmark</div>
-                <div style={{ flex: 1, minHeight: 40 }}>
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center' }}>
                   <svg viewBox="0 0 300 100" style={{ width: '100%', maxHeight: '100%' }}>
                     {(() => {
                       const barData = benchDomains.map(([, d]) => ({
@@ -2746,12 +2751,9 @@ function App() {
                   </svg>
                 </div>
               </div>
-            </div>
 
-            {/* ─── COLUMN 4: Heat Map + Priority + Validity ─── */}
-            <div className="res-col" style={{ display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 }}>
-              {/* Risk Heat Map */}
-              <div className="dcard fi" style={{ animationDelay: '.12s' }}>
+            {/* ─── COLUMN 4, ROW 1: Risk Heat Map ─── */}
+            <div className="dcard fi g-heat" style={{ animationDelay: '.12s', minHeight: 0 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: T.title }}>Risk Heat Map</div>
                 <div style={{ fontSize: 8, color: T.muted, marginBottom: 5 }}>Click any cell for full breakdown</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4 }}>
@@ -2778,6 +2780,8 @@ function App() {
                 </div>
               </div>
 
+            {/* ─── COLUMN 4, ROW 2: Top Priority + Validity ─── */}
+            <div className="res-col g-rstack" style={{ display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 }}>
               {/* Top Priority Risks - Wave Graph */}
               <div className="dcard fi" onClick={() => openModal('Top Priority Risks – All Domains', 'All domains sorted by risk level — critical first')} style={{ animationDelay: '.18s', cursor: 'pointer', transition: 'box-shadow .2s, background .3s', display: 'flex', flexDirection: 'column', minHeight: 0 }}
                 onMouseEnter={e => e.currentTarget.style.boxShadow = `0 0 0 2px ${dark ? '#818cf8' : '#6366f1'}`}
