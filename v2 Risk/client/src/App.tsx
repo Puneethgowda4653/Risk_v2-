@@ -2900,15 +2900,32 @@ function App() {
                       r: 64 - i * (strokeW + gap),
                     }));
                     const hov = hoverRing != null ? radialData[hoverRing] : null;
+                    /* Pick the ring nearest the cursor anywhere over the chart – far more
+                       forgiving than hovering the thin arc itself. */
+                    const pickRing = (e: React.MouseEvent<SVGSVGElement>) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const box = Math.min(rect.width, rect.height);       // square drawn region (meet)
+                      const offX = (rect.width - box) / 2, offY = (rect.height - box) / 2;
+                      const vx = ((e.clientX - rect.left - offX) / box) * 150;
+                      const vy = ((e.clientY - rect.top - offY) / box) * 150;
+                      const dist = Math.hypot(vx - cx, vy - cy);
+                      let best: number | null = null, bestD = Infinity;
+                      radialData.forEach((d, i) => {
+                        const dd = Math.abs(dist - d.r);
+                        if (dd < (strokeW + gap) / 2 + 3 && dd < bestD) { bestD = dd; best = i; }
+                      });
+                      if (best !== hoverRing) setHoverRing(best);
+                    };
                     return (
-                      <svg viewBox="0 0 150 150" style={{ width: '100%', maxHeight: '100%' }}>
+                      <svg viewBox="0 0 150 150" style={{ width: '100%', maxHeight: '100%', cursor: hov ? 'pointer' : 'default' }}
+                        onMouseMove={pickRing} onMouseLeave={() => setHoverRing(null)}>
                         {radialData.map((d, i) => {
                           const circ = 2 * Math.PI * d.r;
                           return (
                             <circle key={`bg-${i}`} cx={cx} cy={cy} r={d.r} fill="none" stroke={T.gridSoft} strokeWidth={strokeW}
                               strokeLinecap="round"
                               strokeDasharray={`${SWEEP * circ} ${circ}`}
-                              transform={`rotate(${rot} ${cx} ${cy})`} />
+                              transform={`rotate(${rot} ${cx} ${cy})`} pointerEvents="none" />
                           );
                         })}
                         {radialData.map((d, i) => {
@@ -2922,20 +2939,8 @@ function App() {
                               strokeDasharray={`${dash} ${circ}`}
                               transform={`rotate(${rot} ${cx} ${cy})`}
                               opacity={dim ? 0.25 : 1}
+                              pointerEvents="none"
                               style={{ transition: 'stroke-dasharray 1s ease, opacity .2s, stroke-width .2s' }} />
-                          );
-                        })}
-                        {/* transparent hit areas – wider than the visible ring for easy hover */}
-                        {radialData.map((d, i) => {
-                          const circ = 2 * Math.PI * d.r;
-                          return (
-                            <circle key={`hit-${i}`} cx={cx} cy={cy} r={d.r} fill="none" stroke="transparent"
-                              strokeWidth={strokeW + gap}
-                              strokeDasharray={`${SWEEP * circ} ${circ}`}
-                              transform={`rotate(${rot} ${cx} ${cy})`}
-                              style={{ cursor: 'pointer', pointerEvents: 'stroke' }}
-                              onMouseEnter={() => setHoverRing(i)}
-                              onMouseLeave={() => setHoverRing(null)} />
                           );
                         })}
                         {hov ? (
