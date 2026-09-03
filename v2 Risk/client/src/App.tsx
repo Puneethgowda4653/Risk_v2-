@@ -2678,11 +2678,11 @@ function App() {
                 <div style={{ fontSize: 8, color: T.muted, marginBottom: 2 }}>Composite score · click for breakdown</div>
                 <div style={{ display: 'flex', justifyContent: 'center' }}>
                   {(() => {
-                    /* Notch gauge – 260° sweep with a bottom gap, purple→cyan active
-                       gradient, per the supplied Gauge design. Driven by result.score. */
-                    const N = 44;                       // notch count
+                    /* Notch gauge – 260° sweep with a 100° bottom gap, purple→cyan
+                       active gradient, per the supplied Gauge design. Driven by score. */
+                    const N = 54;                       // notch count (denser ring)
                     const startAngle = 140, sweep = 260;
-                    const cx = 100, cy = 96, rOut = 80, rIn = 63, nW = 4.2, corner = 2.1;
+                    const cx = 100, cy = 95, rOut = 83, rIn = 60, nW = 4.6;
                     const active = Math.round((result.score / 100) * N);
                     const hex = (h: string) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
                     const mix = (a: string, b: string, t: number) => {
@@ -2692,7 +2692,13 @@ function App() {
                     const actA = '#a855f7', actB = '#06b6d4';
                     const inaA = dark ? '#334155' : '#e2e8f0', inaB = dark ? '#38bdf8' : '#bae6fd';
                     return (
-                      <svg viewBox="0 0 200 160" style={{ width: 168, height: 134 }}>
+                      <svg viewBox="0 0 200 158" style={{ width: 172, height: 136 }}>
+                        <defs>
+                          <filter id="notchGlow" x="-30%" y="-30%" width="160%" height="160%">
+                            <feGaussianBlur stdDeviation="1.6" result="b" />
+                            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+                          </filter>
+                        </defs>
                         {Array.from({ length: N }, (_, i) => {
                           const rad = ((startAngle + sweep * (i / (N - 1))) * Math.PI) / 180;
                           const cos = Math.cos(rad), sin = Math.sin(rad);
@@ -2704,11 +2710,12 @@ function App() {
                           return (
                             <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
                               stroke={fill} strokeWidth={nW} strokeLinecap="round"
-                              opacity={isOn ? 1 : (dark ? 0.4 : 0.55)} rx={corner}
+                              opacity={isOn ? 1 : (dark ? 0.4 : 0.55)}
+                              filter={isOn && dark ? 'url(#notchGlow)' : undefined}
                               style={{ transition: 'stroke .5s' }} />
                           );
                         })}
-                        <text x={cx} y={cy - 2} textAnchor="middle" fontSize="34" fontWeight="800" fill={T.title}>{result.score}%</text>
+                        <text x={cx} y={cy - 1} textAnchor="middle" fontSize="34" fontWeight="800" fill={T.title}>{result.score}%</text>
                         <text x={cx} y={cy + 16} textAnchor="middle" fontSize="9" fontWeight="600" fill={T.muted} style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>Health</text>
                       </svg>
                     );
