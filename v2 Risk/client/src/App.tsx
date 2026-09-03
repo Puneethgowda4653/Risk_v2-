@@ -520,6 +520,7 @@ function App() {
   const [pdfUploadStatus, setPdfUploadStatus] = useState<'idle' | 'generating' | 'uploading' | 'done' | 'error'>('idle');
   const [reportPdfBusy, setReportPdfBusy] = useState(false);
   const [dashTheme, setDashTheme] = useState<'light' | 'dark'>('light');
+  const [hoverRing, setHoverRing] = useState<number | null>(null);
   const [showEarlyBirdsPopup, setShowEarlyBirdsPopup] = useState(false);
   const [authMode, setAuthMode] = useState<'signup' | 'login'>('signup');
   const [loginEmail, setLoginEmail] = useState('');
@@ -2884,7 +2885,8 @@ function App() {
                 <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {(() => {
                     /* Activity-ring chart – concentric 270° arcs with a bottom gap and
-                       rounded caps, per the supplied RingChart (startAngle -π → endAngle π/2). */
+                       rounded caps, per the supplied RingChart (startAngle -π → endAngle π/2).
+                       Hovering a ring highlights it and the center shows its label + value. */
                     const cx = 75, cy = 75, strokeW = 8, gap = 3.5;
                     const SWEEP = 0.75;                 // 270° of the circle is drawn
                     const rot = 135;                    // centers the 90° gap at the bottom
@@ -2892,10 +2894,12 @@ function App() {
                       ? ['#818cf8', '#fbbf24', '#f87171', '#34d399']
                       : ['#6366f1', '#f59e0b', '#ef4444', '#10b981'];
                     const radialData = benchDomains.slice(0, 4).map(([, d], i) => ({
+                      label: d.name.replace(' Risk', ''),
                       value: Math.round(d.score),
                       color: radialColors[i],
                       r: 64 - i * (strokeW + gap),
                     }));
+                    const hov = hoverRing != null ? radialData[hoverRing] : null;
                     return (
                       <svg viewBox="0 0 150 150" style={{ width: '100%', maxHeight: '100%' }}>
                         {radialData.map((d, i) => {
@@ -2910,25 +2914,52 @@ function App() {
                         {radialData.map((d, i) => {
                           const circ = 2 * Math.PI * d.r;
                           const dash = (d.value / 100) * SWEEP * circ;
+                          const dim = hoverRing != null && hoverRing !== i;
                           return (
-                            <circle key={`arc-${i}`} cx={cx} cy={cy} r={d.r} fill="none" stroke={d.color} strokeWidth={strokeW}
+                            <circle key={`arc-${i}`} cx={cx} cy={cy} r={d.r} fill="none" stroke={d.color}
+                              strokeWidth={hoverRing === i ? strokeW + 2 : strokeW}
                               strokeLinecap="round"
                               strokeDasharray={`${dash} ${circ}`}
                               transform={`rotate(${rot} ${cx} ${cy})`}
-                              style={{ transition: 'stroke-dasharray 1s ease' }} />
+                              opacity={dim ? 0.25 : 1}
+                              style={{ transition: 'stroke-dasharray 1s ease, opacity .2s, stroke-width .2s' }} />
                           );
                         })}
-                        <text x={cx} y={cy - 1} textAnchor="middle" fontSize="18" fontWeight="800" fill={T.title}>{validityScore}%</text>
-                        <text x={cx} y={cy + 10} textAnchor="middle" fontSize="6" fontWeight="600" fill={dark ? '#4ade80' : '#16a34a'}>{confidenceLabel}</text>
+                        {/* transparent hit areas – wider than the visible ring for easy hover */}
+                        {radialData.map((d, i) => {
+                          const circ = 2 * Math.PI * d.r;
+                          return (
+                            <circle key={`hit-${i}`} cx={cx} cy={cy} r={d.r} fill="none" stroke="transparent"
+                              strokeWidth={strokeW + gap}
+                              strokeDasharray={`${SWEEP * circ} ${circ}`}
+                              transform={`rotate(${rot} ${cx} ${cy})`}
+                              style={{ cursor: 'pointer', pointerEvents: 'stroke' }}
+                              onMouseEnter={() => setHoverRing(i)}
+                              onMouseLeave={() => setHoverRing(null)} />
+                          );
+                        })}
+                        {hov ? (
+                          <>
+                            <text x={cx} y={cy - 6} textAnchor="middle" fontSize="18" fontWeight="800" fill={hov.color}>{hov.value}%</text>
+                            <text x={cx} y={cy + 8} textAnchor="middle" fontSize="6.5" fontWeight="700" fill={T.text}>{hov.label.substring(0, 14)}</text>
+                            <text x={cx} y={cy + 17} textAnchor="middle" fontSize="5.5" fontWeight="500" fill={T.muted} style={{ textTransform: 'uppercase', letterSpacing: '0.4px' }}>vs benchmark</text>
+                          </>
+                        ) : (
+                          <>
+                            <text x={cx} y={cy - 1} textAnchor="middle" fontSize="18" fontWeight="800" fill={T.title}>{validityScore}%</text>
+                            <text x={cx} y={cy + 10} textAnchor="middle" fontSize="6" fontWeight="600" fill={dark ? '#4ade80' : '#16a34a'}>{confidenceLabel}</text>
+                          </>
+                        )}
                       </svg>
                     );
                   })()}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 8px', flexShrink: 0, paddingTop: 2 }}>
                   {benchDomains.slice(0, 4).map(([id, d], i) => {
-                    const radialColors = ['#6366f1', '#f59e0b', '#ef4444', '#10b981'];
+                    const radialColors = dark ? ['#818cf8', '#fbbf24', '#f87171', '#34d399'] : ['#6366f1', '#f59e0b', '#ef4444', '#10b981'];
                     return (
-                      <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <div key={id} onMouseEnter={() => setHoverRing(i)} onMouseLeave={() => setHoverRing(null)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 3, cursor: 'pointer', borderRadius: 4, padding: '1px 3px', background: hoverRing === i ? (dark ? 'rgba(255,255,255,.06)' : '#f3f4f6') : 'transparent', opacity: hoverRing != null && hoverRing !== i ? 0.4 : 1, transition: 'opacity .2s, background .2s' }}>
                         <span style={{ width: 6, height: 6, borderRadius: '50%', background: radialColors[i], display: 'inline-block', flexShrink: 0 }} />
                         <span style={{ fontSize: 7, color: T.text, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.name.replace(' Risk', '').substring(0, 9)}</span>
                         <span style={{ fontSize: 7, fontWeight: 700, color: radialColors[i], marginLeft: 'auto' }}>{Math.round(d.score)}%</span>
