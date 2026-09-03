@@ -2883,31 +2883,43 @@ function App() {
                 <div style={{ fontSize: 12, fontWeight: 700, color: T.title }}>Validity &amp; Benchmarks</div>
                 <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {(() => {
-                    const cx = 75, cy = 75, strokeW = 7, gap = 2;
-                    const radialColors = ['#6366f1', '#f59e0b', '#ef4444', '#10b981'];
+                    /* Activity-ring chart – concentric 270° arcs with a bottom gap and
+                       rounded caps, per the supplied RingChart (startAngle -π → endAngle π/2). */
+                    const cx = 75, cy = 75, strokeW = 8, gap = 3.5;
+                    const SWEEP = 0.75;                 // 270° of the circle is drawn
+                    const rot = 135;                    // centers the 90° gap at the bottom
+                    const radialColors = dark
+                      ? ['#818cf8', '#fbbf24', '#f87171', '#34d399']
+                      : ['#6366f1', '#f59e0b', '#ef4444', '#10b981'];
                     const radialData = benchDomains.slice(0, 4).map(([, d], i) => ({
                       value: Math.round(d.score),
                       color: radialColors[i],
-                      r: 65 - i * (strokeW + gap),
+                      r: 64 - i * (strokeW + gap),
                     }));
                     return (
                       <svg viewBox="0 0 150 150" style={{ width: '100%', maxHeight: '100%' }}>
-                        {radialData.map((d, i) => (
-                          <circle key={`bg-${i}`} cx={cx} cy={cy} r={d.r} fill="none" stroke={T.gridSoft} strokeWidth={strokeW} />
-                        ))}
                         {radialData.map((d, i) => {
                           const circ = 2 * Math.PI * d.r;
-                          const dash = (d.value / 100) * circ;
+                          return (
+                            <circle key={`bg-${i}`} cx={cx} cy={cy} r={d.r} fill="none" stroke={T.gridSoft} strokeWidth={strokeW}
+                              strokeLinecap="round"
+                              strokeDasharray={`${SWEEP * circ} ${circ}`}
+                              transform={`rotate(${rot} ${cx} ${cy})`} />
+                          );
+                        })}
+                        {radialData.map((d, i) => {
+                          const circ = 2 * Math.PI * d.r;
+                          const dash = (d.value / 100) * SWEEP * circ;
                           return (
                             <circle key={`arc-${i}`} cx={cx} cy={cy} r={d.r} fill="none" stroke={d.color} strokeWidth={strokeW}
                               strokeLinecap="round"
                               strokeDasharray={`${dash} ${circ}`}
-                              transform={`rotate(-90 ${cx} ${cy})`}
+                              transform={`rotate(${rot} ${cx} ${cy})`}
                               style={{ transition: 'stroke-dasharray 1s ease' }} />
                           );
                         })}
-                        <text x={cx} y={cy - 2} textAnchor="middle" fontSize="18" fontWeight="800" fill={T.title}>{validityScore}%</text>
-                        <text x={cx} y={cy + 9} textAnchor="middle" fontSize="6" fontWeight="600" fill={dark ? '#4ade80' : '#16a34a'}>{confidenceLabel}</text>
+                        <text x={cx} y={cy - 1} textAnchor="middle" fontSize="18" fontWeight="800" fill={T.title}>{validityScore}%</text>
+                        <text x={cx} y={cy + 10} textAnchor="middle" fontSize="6" fontWeight="600" fill={dark ? '#4ade80' : '#16a34a'}>{confidenceLabel}</text>
                       </svg>
                     );
                   })()}
