@@ -2677,24 +2677,42 @@ function App() {
                 <div style={{ fontSize: 12, fontWeight: 700, color: T.title }}>Overall Health</div>
                 <div style={{ fontSize: 8, color: T.muted, marginBottom: 2 }}>Composite score · click for breakdown</div>
                 <div style={{ display: 'flex', justifyContent: 'center' }}>
-                  <svg viewBox="0 0 180 108" style={{ width: 150, height: 90 }}>
-                    <defs>
-                      <linearGradient id="healthGrad" x1="0" y1="0" x2="1" y2="0">
-                        <stop offset="0%" stopColor="#ef4444" />
-                        <stop offset="30%" stopColor="#f59e0b" />
-                        <stop offset="60%" stopColor="#eab308" />
-                        <stop offset="100%" stopColor="#22c55e" />
-                      </linearGradient>
-                    </defs>
-                    <path d="M 20 90 A 70 70 0 0 1 160 90" fill="none" stroke={T.gridSoft} strokeWidth="12" strokeLinecap="round" />
-                    <path d="M 20 90 A 70 70 0 0 1 160 90" fill="none" stroke="url(#healthGrad)" strokeWidth="12" strokeLinecap="round"
-                      strokeDasharray={`${(result.score / 100) * 220} 220`}
-                      style={{ transition: 'stroke-dasharray 1.4s ease' }} />
-                    <text x="90" y="76" textAnchor="middle" fontSize="30" fontWeight="800" fill={T.title}>{result.score}%</text>
-                  </svg>
-                </div>
-                <div style={{ textAlign: 'center' }}>
-                  <span style={{ fontSize: 8, color: T.sub, fontWeight: 600 }}>Average health score</span>
+                  {(() => {
+                    /* Notch gauge – 260° sweep with a bottom gap, purple→cyan active
+                       gradient, per the supplied Gauge design. Driven by result.score. */
+                    const N = 44;                       // notch count
+                    const startAngle = 140, sweep = 260;
+                    const cx = 100, cy = 96, rOut = 80, rIn = 63, nW = 4.2, corner = 2.1;
+                    const active = Math.round((result.score / 100) * N);
+                    const hex = (h: string) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+                    const mix = (a: string, b: string, t: number) => {
+                      const A = hex(a), B = hex(b);
+                      return `rgb(${A.map((v, i) => Math.round(v + (B[i] - v) * t)).join(',')})`;
+                    };
+                    const actA = '#a855f7', actB = '#06b6d4';
+                    const inaA = dark ? '#334155' : '#e2e8f0', inaB = dark ? '#38bdf8' : '#bae6fd';
+                    return (
+                      <svg viewBox="0 0 200 160" style={{ width: 168, height: 134 }}>
+                        {Array.from({ length: N }, (_, i) => {
+                          const rad = ((startAngle + sweep * (i / (N - 1))) * Math.PI) / 180;
+                          const cos = Math.cos(rad), sin = Math.sin(rad);
+                          const isOn = i < active;
+                          const t = active > 1 ? i / (active - 1) : 0;
+                          const fill = isOn ? mix(actA, actB, t) : mix(inaA, inaB, i / (N - 1));
+                          const x1 = cx + rIn * cos, y1 = cy + rIn * sin;
+                          const x2 = cx + rOut * cos, y2 = cy + rOut * sin;
+                          return (
+                            <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
+                              stroke={fill} strokeWidth={nW} strokeLinecap="round"
+                              opacity={isOn ? 1 : (dark ? 0.4 : 0.55)} rx={corner}
+                              style={{ transition: 'stroke .5s' }} />
+                          );
+                        })}
+                        <text x={cx} y={cy - 2} textAnchor="middle" fontSize="34" fontWeight="800" fill={T.title}>{result.score}%</text>
+                        <text x={cx} y={cy + 16} textAnchor="middle" fontSize="9" fontWeight="600" fill={T.muted} style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>Health</text>
+                      </svg>
+                    );
+                  })()}
                 </div>
               </div>
 
