@@ -519,6 +519,7 @@ function App() {
   const [supabaseSaveStatus, setSupabaseSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [pdfUploadStatus, setPdfUploadStatus] = useState<'idle' | 'generating' | 'uploading' | 'done' | 'error'>('idle');
   const [reportPdfBusy, setReportPdfBusy] = useState(false);
+  const [dashTheme, setDashTheme] = useState<'light' | 'dark'>('light');
   const [showEarlyBirdsPopup, setShowEarlyBirdsPopup] = useState(false);
   const [authMode, setAuthMode] = useState<'signup' | 'login'>('signup');
   const [loginEmail, setLoginEmail] = useState('');
@@ -2431,26 +2432,79 @@ function App() {
     const validityScore = rm.validityScore;
     const confidenceLabel = rm.confidenceLabel;
 
+    /* ── THEME TOKENS (light / dark) ── */
+    const dark = dashTheme === 'dark';
+    const T = {
+      pageBg: dark ? '#0b1220' : '#eef1f6',
+      cardBg: dark ? '#151d2e' : '#ffffff',
+      cardBorder: dark ? '#26314a' : '#e7ebf2',
+      cardShadow: dark ? '0 1px 3px rgba(0,0,0,.5)' : '0 1px 6px rgba(16,24,40,.06)',
+      title: dark ? '#f1f5f9' : '#0f172a',
+      text: dark ? '#e2e8f0' : '#1f2937',
+      sub: dark ? '#94a3b8' : '#6b7280',
+      muted: dark ? '#64748b' : '#9ca3af',
+      grid: dark ? '#2d3a54' : '#e5e7eb',
+      gridSoft: dark ? '#212c42' : '#f0f0f0',
+      chipBg: dark ? 'rgba(255,255,255,.06)' : '#f3f4f6',
+    };
+
+    /* KPI card definitions – colored per metric, theme-aware tints */
+    const kpiCards = [
+      { label: 'Overall Score', value: `${result.score}%`, accent: dark ? '#4ade80' : '#16a34a', tint: dark ? 'rgba(34,197,94,.10)' : '#ecfdf5', ring: dark ? 'rgba(34,197,94,.35)' : '#bbf7d0', icon: 'gauge', onClick: () => openModal('Overall Score – All 18 Domains', `Composite risk score: ${result.score}% · Click a domain row for detail`) },
+      { label: 'Risk Exposure', value: `${riskExposure}%`, accent: dark ? '#fbbf24' : '#d97706', tint: dark ? 'rgba(234,179,8,.10)' : '#fffbeb', ring: dark ? 'rgba(234,179,8,.35)' : '#fde68a', icon: 'warn', onClick: () => openModal('Risk Exposure – All Domains', `Risk exposure: ${riskExposure}% · Sorted highest risk first`) },
+      { label: 'High Performers', value: `${highPerformers || 1}`, accent: dark ? '#4ade80' : '#16a34a', tint: dark ? 'rgba(34,197,94,.10)' : '#ecfdf5', ring: dark ? 'rgba(34,197,94,.35)' : '#bbf7d0', icon: 'users', onClick: () => openModal('High Performers – Low-Risk Domains', `${highPerformers || 1} domain(s) with score ≤ 30% (low risk)`) },
+      { label: 'Critical Issues', value: `${criticalFlags + orangeFlags}`, accent: dark ? '#f87171' : '#dc2626', tint: dark ? 'rgba(239,68,68,.10)' : '#fef2f2', ring: dark ? 'rgba(239,68,68,.35)' : '#fecaca', icon: 'alert', onClick: () => openModal('Critical & Flagged Issues – All Domains', `${criticalFlags} critical · ${orangeFlags} elevated flags across all domains`) },
+      { label: 'Domains', value: `${domains.length}`, accent: dark ? '#60a5fa' : '#2563eb', tint: dark ? 'rgba(59,130,246,.10)' : '#eff6ff', ring: dark ? 'rgba(59,130,246,.35)' : '#bfdbfe', icon: 'grid', onClick: () => openModal('All Assessed Domains', `Full breakdown of all ${domains.length} domains`) },
+    ];
+    const kpiIcon = (name: string, color: string) => {
+      const p = { width: 15, height: 15, viewBox: '0 0 24 24', fill: 'none', stroke: color, strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+      switch (name) {
+        case 'gauge': return <svg {...p}><path d="M12 14l4-4" /><circle cx="12" cy="14" r="8" /><path d="M4 14a8 8 0 0 1 16 0" /></svg>;
+        case 'warn': return <svg {...p}><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12" y2="17" /></svg>;
+        case 'users': return <svg {...p}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>;
+        case 'alert': return <svg {...p}><circle cx="12" cy="12" r="9" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12" y2="16" /></svg>;
+        default: return <svg {...p}><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></svg>;
+      }
+    };
+
+    /* Domain Performance Trend – smooth 6-month ramp to each top domain's current score */
+    const trendSeries = sorted.slice(0, 3).map(([, d], idx) => {
+      const trendColors = dark ? ['#34d399', '#c084fc', '#38bdf8'] : ['#10b981', '#a855f7', '#3b82f6'];
+      const target = d.score;
+      const start = Math.max(4, target * (0.35 + idx * 0.05));
+      const pts = Array.from({ length: 6 }, (_, m) => {
+        const prog = m / 5;
+        const eased = prog * prog * (3 - 2 * prog); // smoothstep
+        const wobble = Math.sin((m + idx) * 1.3) * 2.5;
+        return Math.max(2, Math.round(start + (target - start) * eased + (m > 0 && m < 5 ? wobble : 0)));
+      });
+      return { name: d.name.replace(' Risk', '').substring(0, 10), color: trendColors[idx], pts };
+    });
+    const trendMax = Math.max(50, ...trendSeries.flatMap(s => s.pts));
+
     return (
-      <div id="risk-dashboard-capture" className="res-root" style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans', system-ui, sans-serif", background: '#f4f5f7', overflow: 'hidden' }}>
+      <div id="risk-dashboard-capture" className="res-root" style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans', system-ui, sans-serif", background: T.pageBg, overflow: 'hidden', transition: 'background .3s' }}>
         <style>{SHARED_STYLES + `
           ::-webkit-scrollbar { width: 0; height: 0; }
           @keyframes fadeUp { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
           .fi { animation: fadeUp .35s ease both; }
-          .dcard { background:white; border-radius:10px; padding:8px 10px; box-shadow:0 1px 6px rgba(0,0,0,.04); border:1px solid #f0f0f0; }
-          .db-btn { padding:4px 10px; border-radius:16px; font-size:9px; font-weight:600; font-family:inherit; cursor:pointer; border:none; transition:all .2s; display:inline-flex; align-items:center; gap:4px; }
-          .db-btn:hover { transform:translateY(-1px); box-shadow:0 2px 6px rgba(0,0,0,.12); }
+          .dcard { background:${T.cardBg}; border-radius:14px; padding:10px 12px; box-shadow:${T.cardShadow}; border:1px solid ${T.cardBorder}; transition:background .3s, border-color .3s; }
+          .db-btn { padding:5px 11px; border-radius:16px; font-size:9px; font-weight:600; font-family:inherit; cursor:pointer; border:none; transition:all .2s; display:inline-flex; align-items:center; gap:4px; }
+          .db-btn:hover { transform:translateY(-1px); box-shadow:0 2px 6px rgba(0,0,0,.18); }
           .res-kpi-grid { grid-template-columns: repeat(5, 1fr); }
-          .res-main-grid { grid-template-columns: 1.1fr 1fr 1fr; }
+          .res-main-grid { grid-template-columns: 1.15fr 1fr 1fr 1fr; }
+          @media (max-width: 900px) {
+            .res-main-grid { grid-template-columns: 1fr 1fr !important; }
+          }
           @media (max-width: 768px) {
             .res-root { height: auto !important; overflow: auto !important; }
-            .res-topbar { flex-wrap: wrap; height: auto !important; min-height: 40px; padding: 6px 10px !important; }
+            .res-topbar { flex-wrap: wrap; height: auto !important; min-height: 40px; padding: 8px 12px !important; }
             .res-topbar-btns { flex-wrap: wrap; gap: 3px !important; }
             .res-kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
             .res-main-grid { grid-template-columns: 1fr !important; flex: unset !important; }
             .res-col { min-height: unset !important; }
             .res-col > * { flex: unset !important; min-height: 200px !important; }
-            .res-body { padding: 6px !important; overflow: auto !important; flex: unset !important; }
+            .res-body { padding: 10px !important; overflow: auto !important; flex: unset !important; }
             .db-btn-hide { display: none !important; }
           }
           @media (max-width: 480px) {
@@ -2459,100 +2513,70 @@ function App() {
           }
         `}</style>
 
-        {/* ── TOP BAR – dark purple/navy ── */}
-        <div className="res-topbar" style={{ height: 40, flexShrink: 0, background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #3b0764 100%)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 14 }}>🛡️</span>
+        {/* ── HEADER BAR ── */}
+        <div className="res-topbar" style={{ height: 52, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 18 }}>🛡️</span>
             <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'white', letterSpacing: 0.3 }}>Risk Assessment Dashboard</div>
-              <div style={{ fontSize: 8, color: 'rgba(255,255,255,.5)', fontWeight: 500, letterSpacing: 0.4, textTransform: 'uppercase' }}>{metadata.companyName} · Click any element for insights</div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: T.title, letterSpacing: -0.3 }}>Enterprise Risk Assessment Dashboard</div>
+              <div style={{ fontSize: 8, color: T.muted, fontWeight: 500, letterSpacing: 0.4, textTransform: 'uppercase' }}>{metadata.companyName} · Click any element for insights</div>
             </div>
           </div>
-          <div className="res-topbar-btns" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span className="db-btn db-btn-hide" style={{ background: 'rgba(34,197,94,.9)', color: 'white', fontSize: 8 }}>High Validity</span>
-            <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'linear-gradient(135deg,#8b5cf6,#a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 800, fontSize: 9, border: '1.5px solid rgba(255,255,255,.3)' }}>
+          <div className="res-topbar-btns" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span className="db-btn db-btn-hide" style={{ background: dark ? 'rgba(34,197,94,.18)' : 'rgba(34,197,94,.12)', color: dark ? '#4ade80' : '#16a34a', fontSize: 8, border: `1px solid ${dark ? 'rgba(34,197,94,.3)' : '#bbf7d0'}` }}>● High Validity</span>
+            {/* Theme toggle */}
+            <button className="db-btn" onClick={() => setDashTheme(dark ? 'light' : 'dark')} title="Toggle theme" style={{ background: T.chipBg, color: T.text, padding: '6px 10px' }}>
+              {dark ? '☀️ Light' : '🌙 Dark'}
+            </button>
+            <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'linear-gradient(135deg,#8b5cf6,#a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 800, fontSize: 9, border: '1.5px solid rgba(255,255,255,.3)' }}>
               {metadata.name.charAt(0).toUpperCase()}
             </div>
-            <span style={{ color: 'white', fontSize: 9, fontWeight: 600 }}>{metadata.name.split(' ')[0]}</span>
-            <button className="db-btn" onClick={handleDownloadReportPdf} disabled={reportPdfBusy} style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>{reportPdfBusy ? '⏳ Generating…' : '📄 Download PDF'}</button>
-            <button className="db-btn" onClick={handleReset} style={{ background: 'rgba(255,255,255,.15)', color: 'white' }}>↺ Retake</button>
+            <span style={{ color: T.text, fontSize: 9, fontWeight: 600 }}>{metadata.name.split(' ')[0]}</span>
+            <button className="db-btn" onClick={handleDownloadReportPdf} disabled={reportPdfBusy} style={{ background: dark ? 'rgba(99,102,241,.9)' : '#6366f1', color: 'white' }}>{reportPdfBusy ? '⏳ Generating…' : '📄 Download PDF'}</button>
+            <button className="db-btn" onClick={handleReset} style={{ background: T.chipBg, color: T.text }}>↺ Retake</button>
           </div>
         </div>
 
         {/* ── FIXED BODY – no scroll on desktop, scrollable on mobile ── */}
-        <div className="res-body" style={{ flex: 1, overflow: 'hidden', padding: '6px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div className="res-body" style={{ flex: 1, overflow: 'hidden', padding: '4px 12px 10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
 
-          {/* ═══ ROW 1: 5 Gradient KPI Cards ═══ */}
-          <div className="res-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6, flexShrink: 0 }}>
-            {/* Overall Score */}
-            <div className="fi" onClick={() => openModal('Overall Score – All 18 Domains', `Composite risk score: ${result.score}% · Click a domain row for detail`)} style={{ borderRadius: 10, padding: '8px 12px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white', position: 'relative', overflow: 'hidden', animationDelay: '0s', cursor: 'pointer', transition: 'transform .15s, box-shadow .15s' }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(99,102,241,.45)'; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}>
-              <div style={{ position: 'absolute', top: -8, right: -8, width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,.08)' }} />
-              <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1 }}>{result.score}%</div>
-              <div style={{ fontSize: 9, fontWeight: 500, opacity: .85, marginTop: 2 }}>Overall Score</div>
-              <div style={{ fontSize: 7, opacity: .65, marginTop: 1 }}>🔍 Click to drill down</div>
-            </div>
-            {/* Risk Exposure */}
-            <div className="fi" onClick={() => openModal('Risk Exposure – All Domains', `Risk exposure: ${riskExposure}% · Sorted highest risk first`)} style={{ borderRadius: 10, padding: '8px 12px', background: 'linear-gradient(135deg, #ef4444, #f97316)', color: 'white', position: 'relative', overflow: 'hidden', animationDelay: '.04s', cursor: 'pointer', transition: 'transform .15s, box-shadow .15s' }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(239,68,68,.45)'; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}>
-              <div style={{ position: 'absolute', top: -8, right: -8, width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,.08)' }} />
-              <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1 }}>{riskExposure}%</div>
-              <div style={{ fontSize: 9, fontWeight: 500, opacity: .85, marginTop: 2 }}>Risk Exposure</div>
-              <div style={{ fontSize: 7, opacity: .65, marginTop: 1 }}>🔍 Click to drill down</div>
-            </div>
-            {/* High Performers */}
-            <div className="fi" onClick={() => openModal('High Performers – Low-Risk Domains', `${highPerformers || 1} domain(s) with score ≤ 30% (low risk)`)} style={{ borderRadius: 10, padding: '8px 12px', background: 'linear-gradient(135deg, #10b981, #34d399)', color: 'white', position: 'relative', overflow: 'hidden', animationDelay: '.08s', cursor: 'pointer', transition: 'transform .15s, box-shadow .15s' }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(16,185,129,.45)'; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}>
-              <div style={{ position: 'absolute', top: -8, right: -8, width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,.08)' }} />
-              <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1 }}>{highPerformers || 1}</div>
-              <div style={{ fontSize: 9, fontWeight: 500, opacity: .85, marginTop: 2 }}>High Performers</div>
-              <div style={{ fontSize: 7, opacity: .65, marginTop: 1 }}>🔍 Click to drill down</div>
-            </div>
-            {/* Critical Issues */}
-            <div className="fi" onClick={() => openModal('Critical & Flagged Issues – All Domains', `${criticalFlags} critical · ${orangeFlags} elevated flags across all domains`)} style={{ borderRadius: 10, padding: '8px 12px', background: 'linear-gradient(135deg, #f59e0b, #fbbf24)', color: 'white', position: 'relative', overflow: 'hidden', animationDelay: '.12s', cursor: 'pointer', transition: 'transform .15s, box-shadow .15s' }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(245,158,11,.45)'; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}>
-              <div style={{ position: 'absolute', top: -8, right: -8, width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,.08)' }} />
-              <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1 }}>{criticalFlags + orangeFlags}</div>
-              <div style={{ fontSize: 9, fontWeight: 500, opacity: .85, marginTop: 2 }}>Critical Issues</div>
-              <div style={{ fontSize: 7, opacity: .65, marginTop: 1 }}>🔍 Click to drill down</div>
-            </div>
-            {/* Domains */}
-            <div className="fi" onClick={() => openModal('All Assessed Domains', `Full breakdown of all ${domains.length} domains`)} style={{ borderRadius: 10, padding: '8px 12px', background: 'linear-gradient(135deg, #7c3aed, #a855f7)', color: 'white', position: 'relative', overflow: 'hidden', animationDelay: '.16s', cursor: 'pointer', transition: 'transform .15s, box-shadow .15s' }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(124,58,237,.45)'; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}>
-              <div style={{ position: 'absolute', top: -8, right: -8, width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,.08)' }} />
-              <div style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', opacity: .12, fontSize: 28 }}>🎯</div>
-              <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1 }}>{domains.length}</div>
-              <div style={{ fontSize: 9, fontWeight: 500, opacity: .85, marginTop: 2 }}>Domains</div>
-              <div style={{ fontSize: 7, opacity: .65, marginTop: 1 }}>🔍 Click to drill down</div>
-            </div>
+          {/* ═══ ROW 1: 5 KPI Cards ═══ */}
+          <div className="res-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, flexShrink: 0 }}>
+            {kpiCards.map((k, i) => (
+              <div key={k.label} className="fi" onClick={k.onClick} style={{ borderRadius: 14, padding: '11px 14px', background: dark ? T.cardBg : k.tint, border: `1px solid ${dark ? T.cardBorder : k.ring}`, boxShadow: T.cardShadow, position: 'relative', overflow: 'hidden', animationDelay: `${i * 0.04}s`, cursor: 'pointer', transition: 'transform .15s, box-shadow .15s' }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 8px 22px ${dark ? 'rgba(0,0,0,.5)' : 'rgba(16,24,40,.12)'}`; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = T.cardShadow; }}>
+                {dark && <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(120deg, ${k.tint}, transparent 65%)`, pointerEvents: 'none' }} />}
+                <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: T.sub }}>{k.label}</div>
+                  <div style={{ width: 26, height: 26, borderRadius: 8, background: dark ? 'rgba(255,255,255,.05)' : '#ffffff', border: `1px solid ${k.ring}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{kpiIcon(k.icon, k.accent)}</div>
+                </div>
+                <div style={{ position: 'relative', fontSize: 26, fontWeight: 800, lineHeight: 1.1, color: k.accent, marginTop: 4 }}>{k.value}</div>
+                <div style={{ position: 'relative', fontSize: 8, color: T.muted, marginTop: 3, fontWeight: 500 }}>Click to drill down</div>
+              </div>
+            ))}
           </div>
 
-          {/* ═══ ROW 2: 3-column layout – fills remaining height ═══ */}
-          <div className="res-main-grid" style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr 1fr', gap: 6, flex: 1, minHeight: 0 }}>
+          {/* ═══ ROW 2: 4-column layout – fills remaining height ═══ */}
+          <div className="res-main-grid" style={{ display: 'grid', gridTemplateColumns: '1.15fr 1fr 1fr 1fr', gap: 8, flex: 1, minHeight: 0 }}>
 
-            {/* ─── LEFT COLUMN ─── */}
-            <div className="res-col" style={{ display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0 }}>
-              {/* Domain Performance Radar */}
-              <div className="dcard fi" onClick={() => openModal('Domain Performance Radar – All Domains', 'Full radar breakdown across all 18 risk domains')} style={{ flex: 1, animationDelay: '.08s', display: 'flex', flexDirection: 'column', minHeight: 0, cursor: 'pointer', transition: 'box-shadow .2s' }}
-                onMouseEnter={e => e.currentTarget.style.boxShadow = '0 0 0 2px #6366f1'}
-                onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 6px rgba(0,0,0,.04)'}>
+            {/* ─── COLUMN 1: Domain Performance Radar ─── */}
+            <div className="res-col" style={{ display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 }}>
+              <div className="dcard fi" onClick={() => openModal('Domain Performance Radar – All Domains', 'Full radar breakdown across all 18 risk domains')} style={{ flex: 1, animationDelay: '.08s', display: 'flex', flexDirection: 'column', minHeight: 0, cursor: 'pointer', transition: 'box-shadow .2s, background .3s' }}
+                onMouseEnter={e => e.currentTarget.style.boxShadow = `0 0 0 2px ${dark ? '#818cf8' : '#6366f1'}`}
+                onMouseLeave={e => e.currentTarget.style.boxShadow = T.cardShadow}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 2, flexShrink: 0 }}>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#111827' }}>🔍 Domain Performance</div>
-                    <div style={{ fontSize: 8, color: '#9ca3af' }}>Click chart for all 18-domain detail</div>
-                  </div>
-                  <button onClick={e => { e.stopPropagation(); openModal('Domain Performance Radar – All Domains', 'Full radar breakdown across all 18 risk domains'); }} style={{ background: '#eff6ff', border: 'none', borderRadius: 4, width: 18, height: 18, cursor: 'pointer', fontSize: 9 }}>🔄</button>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: T.title }}>Domain Performance</div>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 8, color: T.sub, fontWeight: 600 }}>
+                    <span style={{ width: 12, height: 0, borderTop: `2px dashed ${dark ? '#22d3ee' : '#f97316'}`, display: 'inline-block' }} />Benchmark
+                  </span>
                 </div>
-                {/* Dual-dataset Radar */}
                 <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <svg viewBox="0 0 260 230" style={{ width: '100%', maxHeight: '100%' }}>
+                  <svg viewBox="0 0 260 240" style={{ width: '100%', maxHeight: '100%' }}>
                     {(() => {
-                      const n = radarDomains.length, cx = 130, cy = 115, R = 85;
+                      const n = radarDomains.length, cx = 130, cy = 120, R = 88;
+                      const userColor = dark ? '#818cf8' : '#6366f1';
+                      const benchColor = dark ? '#22d3ee' : '#f97316';
                       const pt = (i: number, frac: number) => {
                         const a = (2 * Math.PI * i) / n - Math.PI / 2;
                         return { x: cx + frac * R * Math.cos(a), y: cy + frac * R * Math.sin(a) };
@@ -2562,17 +2586,17 @@ function App() {
                       const benchPts = radarBench.map((s, i) => pt(i, s / 100));
                       return (
                         <>
-                          {[0.25, 0.5, 0.75, 1].map(f => <polygon key={f} points={polygon(f)} fill="none" stroke="#e5e7eb" strokeWidth=".8" strokeDasharray={f < 1 ? '2,2' : '0'} />)}
-                          {Array.from({ length: n }, (_, i) => { const e = pt(i, 1); return <line key={i} x1={cx} y1={cy} x2={e.x} y2={e.y} stroke="#e5e7eb" strokeWidth=".6" />; })}
-                          <polygon points={benchPts.map(p => `${p.x},${p.y}`).join(' ')} fill="rgba(249,115,22,.08)" stroke="#f97316" strokeWidth="1.5" strokeDasharray="4,3" strokeLinejoin="round" />
-                          <polygon points={userPts.map(p => `${p.x},${p.y}`).join(' ')} fill="rgba(99,102,241,.12)" stroke="#6366f1" strokeWidth="2" strokeLinejoin="round" />
-                          {userPts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="3" fill="#6366f1" stroke="white" strokeWidth="1.5" />)}
+                          {[0.25, 0.5, 0.75, 1].map(f => <polygon key={f} points={polygon(f)} fill="none" stroke={T.grid} strokeWidth=".8" strokeDasharray={f < 1 ? '2,2' : '0'} />)}
+                          {Array.from({ length: n }, (_, i) => { const e = pt(i, 1); return <line key={i} x1={cx} y1={cy} x2={e.x} y2={e.y} stroke={T.grid} strokeWidth=".6" />; })}
+                          <polygon points={benchPts.map(p => `${p.x},${p.y}`).join(' ')} fill={dark ? 'rgba(34,211,238,.10)' : 'rgba(249,115,22,.08)'} stroke={benchColor} strokeWidth="1.5" strokeDasharray="4,3" strokeLinejoin="round" />
+                          <polygon points={userPts.map(p => `${p.x},${p.y}`).join(' ')} fill={dark ? 'rgba(129,140,248,.22)' : 'rgba(99,102,241,.12)'} stroke={userColor} strokeWidth="2" strokeLinejoin="round" />
+                          {userPts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="3" fill={userColor} stroke={T.cardBg} strokeWidth="1.5" />)}
                           {radarLabels.map((l, i) => {
-                            const lp = pt(i, 1.25);
+                            const lp = pt(i, 1.24);
                             return (
-                              <text key={i} x={lp.x} y={lp.y} textAnchor="middle" dominantBaseline="middle" fontSize="7" fontWeight="600" fill="#6b7280">
+                              <text key={i} x={lp.x} y={lp.y} textAnchor="middle" dominantBaseline="middle" fontSize="7" fontWeight="600" fill={T.sub}>
                                 {l}
-                                <tspan x={lp.x} dy="8" fontSize="6.5" fontWeight="700" fill="#374151">({Math.round(radarScores[i])}%)</tspan>
+                                <tspan x={lp.x} dy="8" fontSize="6.5" fontWeight="700" fill={T.text}>({Math.round(radarScores[i])}%)</tspan>
                               </text>
                             );
                           })}
@@ -2581,52 +2605,74 @@ function App() {
                     })()}
                   </svg>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'center', gap: 12, flexShrink: 0, paddingTop: 2 }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 8, color: '#6b7280', fontWeight: 600 }}>
-                    <span style={{ width: 10, height: 2, background: '#6366f1', borderRadius: 2, display: 'inline-block' }} />Your Score
+                <div style={{ display: 'flex', justifyContent: 'center', gap: 14, flexShrink: 0, paddingTop: 2 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 8, color: T.sub, fontWeight: 600 }}>
+                    <span style={{ width: 10, height: 2, background: dark ? '#818cf8' : '#6366f1', borderRadius: 2, display: 'inline-block' }} />Your Score
                   </span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 8, color: '#6b7280', fontWeight: 600 }}>
-                    <span style={{ width: 10, height: 2, background: '#f97316', borderRadius: 2, display: 'inline-block' }} />Benchmark
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 8, color: T.sub, fontWeight: 600 }}>
+                    <span style={{ width: 10, height: 2, background: dark ? '#22d3ee' : '#f97316', borderRadius: 2, display: 'inline-block' }} />Benchmark
                   </span>
-                </div>
-              </div>
-
-              {/* 90-Day Action Plan */}
-              <div className="dcard fi" style={{ animationDelay: '.2s', flexShrink: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#111827' }}>📋 90-Day Action Plan</div>
-                  <span style={{ cursor: 'pointer', fontSize: 10 }}>⬇️</span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
-                  <div>
-                    <div style={{ fontSize: 7, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', marginBottom: 3 }}>Month 1</div>
-                    <div style={{ fontSize: 8, color: '#374151', display: 'flex', alignItems: 'center', gap: 3, marginBottom: 2 }}><span style={{ color: '#ef4444', fontSize: 6 }}>🔴</span> Fix {criticalFlags + orangeFlags} critical risks</div>
-                    <div style={{ fontSize: 8, color: '#374151', display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ color: '#ef4444', fontSize: 6 }}>🔴</span> External: urgent</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 7, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', marginBottom: 3 }}>Month 2</div>
-                    <div style={{ fontSize: 8, color: '#374151', display: 'flex', alignItems: 'center', gap: 3, marginBottom: 2 }}><span style={{ color: '#f59e0b', fontSize: 6 }}>🟠</span> Improve average areas</div>
-                    <div style={{ fontSize: 8, color: '#374151', display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ color: '#6366f1', fontSize: 6 }}>🟣</span> Strategic: train</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 7, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', marginBottom: 3 }}>Month 3</div>
-                    <div style={{ fontSize: 8, color: '#374151', display: 'flex', alignItems: 'center', gap: 3, marginBottom: 2 }}><span style={{ color: '#10b981', fontSize: 6 }}>🟢</span> Embed practices</div>
-                    <div style={{ fontSize: 8, color: '#374151', display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ color: '#10b981', fontSize: 6 }}>🟢</span> Reassessment</div>
-                  </div>
                 </div>
               </div>
             </div>
 
-            {/* ─── CENTER COLUMN ─── */}
-            <div className="res-col" style={{ display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0 }}>
+            {/* ─── COLUMN 2: Domain Performance Trend ─── */}
+            <div className="res-col" style={{ display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 }}>
+              <div className="dcard fi" onClick={() => openModal('Domain Performance Trend – Top Domains', 'Projected 6-month trajectory toward current domain scores')} style={{ flex: 1, animationDelay: '.12s', display: 'flex', flexDirection: 'column', minHeight: 0, cursor: 'pointer', transition: 'box-shadow .2s, background .3s' }}
+                onMouseEnter={e => e.currentTarget.style.boxShadow = `0 0 0 2px ${dark ? '#818cf8' : '#6366f1'}`}
+                onMouseLeave={e => e.currentTarget.style.boxShadow = T.cardShadow}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: T.title }}>Domain Performance Trend</div>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: 12, flexShrink: 0, margin: '4px 0 2px' }}>
+                  {trendSeries.map(s => (
+                    <span key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 8, color: T.sub, fontWeight: 600 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.color, display: 'inline-block' }} />{s.name}
+                    </span>
+                  ))}
+                </div>
+                <div style={{ flex: 1, minHeight: 0 }}>
+                  <svg viewBox="0 0 280 180" preserveAspectRatio="none" style={{ width: '100%', height: '100%' }}>
+                    {(() => {
+                      const mL = 26, mR = 8, mT = 8, mB = 22;
+                      const pw = 280 - mL - mR, ph = 180 - mT - mB;
+                      const xAt = (m: number) => mL + (m / 5) * pw;
+                      const yAt = (v: number) => mT + ph - (v / trendMax) * ph;
+                      const yTicks = [0, Math.round(trendMax / 4), Math.round(trendMax / 2), Math.round(trendMax * 3 / 4), trendMax];
+                      const linePath = (pts: number[]) => pts.map((v, m) => `${m === 0 ? 'M' : 'L'} ${xAt(m).toFixed(1)} ${yAt(v).toFixed(1)}`).join(' ');
+                      return (
+                        <>
+                          {yTicks.map((tk, i) => (
+                            <g key={i}>
+                              <line x1={mL} y1={yAt(tk)} x2={280 - mR} y2={yAt(tk)} stroke={T.gridSoft} strokeWidth="0.8" />
+                              <text x={mL - 4} y={yAt(tk) + 2.5} textAnchor="end" fontSize="6.5" fill={T.muted}>{tk}</text>
+                            </g>
+                          ))}
+                          {Array.from({ length: 6 }, (_, m) => (
+                            <text key={m} x={xAt(m)} y={180 - 7} textAnchor="middle" fontSize="6.5" fill={T.muted}>M{m + 1}</text>
+                          ))}
+                          {trendSeries.map((s, si) => (
+                            <g key={si}>
+                              <path d={linePath(s.pts)} fill="none" stroke={s.color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                              {s.pts.map((v, m) => <circle key={m} cx={xAt(m)} cy={yAt(v)} r="2.4" fill={s.color} stroke={T.cardBg} strokeWidth="1" />)}
+                            </g>
+                          ))}
+                        </>
+                      );
+                    })()}
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            {/* ─── COLUMN 3: Overall Health + Best/Worst + Benchmark ─── */}
+            <div className="res-col" style={{ display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 }}>
               {/* Overall Health Gauge */}
-              <div className="dcard fi" onClick={() => openModal('Overall Health – Score Per Domain', `Composite score: ${result.score}% · All 18 domains ranked`)} style={{ animationDelay: '.1s', cursor: 'pointer', transition: 'box-shadow .2s' }}
-                onMouseEnter={e => e.currentTarget.style.boxShadow = '0 0 0 2px #6366f1'}
-                onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 6px rgba(0,0,0,.04)'}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#111827' }}>🎯 Overall Health</div>
-                <div style={{ fontSize: 8, color: '#9ca3af', marginBottom: 2 }}>Composite score · click for domain breakdown</div>
+              <div className="dcard fi" onClick={() => openModal('Overall Health – Score Per Domain', `Composite score: ${result.score}% · All 18 domains ranked`)} style={{ animationDelay: '.1s', cursor: 'pointer', transition: 'box-shadow .2s, background .3s' }}
+                onMouseEnter={e => e.currentTarget.style.boxShadow = `0 0 0 2px ${dark ? '#818cf8' : '#6366f1'}`}
+                onMouseLeave={e => e.currentTarget.style.boxShadow = T.cardShadow}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: T.title }}>Overall Health</div>
+                <div style={{ fontSize: 8, color: T.muted, marginBottom: 2 }}>Composite score · click for breakdown</div>
                 <div style={{ display: 'flex', justifyContent: 'center' }}>
-                  <svg viewBox="0 0 180 110" style={{ width: 160, height: 95 }}>
+                  <svg viewBox="0 0 180 108" style={{ width: 150, height: 90 }}>
                     <defs>
                       <linearGradient id="healthGrad" x1="0" y1="0" x2="1" y2="0">
                         <stop offset="0%" stopColor="#ef4444" />
@@ -2635,53 +2681,41 @@ function App() {
                         <stop offset="100%" stopColor="#22c55e" />
                       </linearGradient>
                     </defs>
-                    <path d="M 20 90 A 70 70 0 0 1 160 90" fill="none" stroke="#f0f0f0" strokeWidth="12" strokeLinecap="round" />
+                    <path d="M 20 90 A 70 70 0 0 1 160 90" fill="none" stroke={T.gridSoft} strokeWidth="12" strokeLinecap="round" />
                     <path d="M 20 90 A 70 70 0 0 1 160 90" fill="none" stroke="url(#healthGrad)" strokeWidth="12" strokeLinecap="round"
                       strokeDasharray={`${(result.score / 100) * 220} 220`}
                       style={{ transition: 'stroke-dasharray 1.4s ease' }} />
-                    <text x="90" y="75" textAnchor="middle" fontSize="30" fontWeight="800" fill="#111827">{result.score}%</text>
-                    <text x="20" y="104" textAnchor="middle" fontSize="7" fill="#9ca3af">0%</text>
-                    <text x="90" y="104" textAnchor="middle" fontSize="7" fill="#9ca3af">50%</text>
-                    <text x="160" y="104" textAnchor="middle" fontSize="7" fill="#9ca3af">100%</text>
+                    <text x="90" y="76" textAnchor="middle" fontSize="30" fontWeight="800" fill={T.title}>{result.score}%</text>
                   </svg>
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <span style={{ fontSize: 8, color: scoreColor(result.score), fontWeight: 600 }}>🟢 Average health score</span>
+                  <span style={{ fontSize: 8, color: T.sub, fontWeight: 600 }}>Average health score</span>
                 </div>
               </div>
 
-              {/* Best & Worst Domain */}
-              <div className="dcard fi" onClick={() => openModal('Best & Worst – Full Domain Ranking', 'Complete ranking from lowest risk to highest risk')} style={{ animationDelay: '.15s', cursor: 'pointer', transition: 'box-shadow .2s' }}
-                onMouseEnter={e => e.currentTarget.style.boxShadow = '0 0 0 2px #10b981'}
-                onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 6px rgba(0,0,0,.04)'}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#111827', marginBottom: 5 }}>🏆 Best & Worst Domain · <span style={{ fontSize: 8, color: '#6b7280', fontWeight: 500 }}>click to see all</span></div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0' }}>
-                    <div style={{ width: 24, height: 24, borderRadius: 6, background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#16a34a' }}>1</div>
+              {/* Best & Worst Domain + vs Industry Benchmark */}
+              <div className="dcard fi" onClick={() => openModal('Best & Worst – Full Domain Ranking', 'Complete ranking from lowest risk to highest risk')} style={{ flex: 1, animationDelay: '.15s', minHeight: 0, display: 'flex', flexDirection: 'column', cursor: 'pointer', transition: 'box-shadow .2s, background .3s' }}
+                onMouseEnter={e => e.currentTarget.style.boxShadow = `0 0 0 2px ${dark ? '#34d399' : '#10b981'}`}
+                onMouseLeave={e => e.currentTarget.style.boxShadow = T.cardShadow}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: T.title, marginBottom: 5 }}>Best &amp; Worst Domain</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 9px', background: dark ? 'rgba(34,197,94,.12)' : '#f0fdf4', borderRadius: 8, border: `1px solid ${dark ? 'rgba(34,197,94,.3)' : '#bbf7d0'}` }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 7, fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', letterSpacing: 0.4 }}>Strongest</div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: '#111827' }}>{strongest ? strongest[1].name : 'N/A'}</div>
+                      <div style={{ fontSize: 7, fontWeight: 700, color: dark ? '#4ade80' : '#16a34a', textTransform: 'uppercase', letterSpacing: 0.4 }}>Strongest</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: T.text }}>{strongest ? strongest[1].name : 'N/A'}</div>
                     </div>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: '#16a34a' }}>{strongest ? Math.round(100 - strongest[1].score) : 0}%</div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: dark ? '#4ade80' : '#16a34a' }}>{strongest ? Math.round(100 - strongest[1].score) : 0}%</div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', background: '#fef2f2', borderRadius: 8, border: '1px solid #fecaca' }}>
-                    <div style={{ width: 24, height: 24, borderRadius: 6, background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#dc2626' }}>!</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 9px', background: dark ? 'rgba(239,68,68,.12)' : '#fef2f2', borderRadius: 8, border: `1px solid ${dark ? 'rgba(239,68,68,.3)' : '#fecaca'}` }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 7, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: 0.4 }}>Weakest</div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: '#111827' }}>{weakest ? weakest[1].name : 'N/A'}</div>
+                      <div style={{ fontSize: 7, fontWeight: 700, color: dark ? '#f87171' : '#dc2626', textTransform: 'uppercase', letterSpacing: 0.4 }}>Weakest</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: T.text }}>{weakest ? weakest[1].name : 'N/A'}</div>
                     </div>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: '#dc2626' }}>{weakest ? Math.round(100 - weakest[1].score) : 0}%</div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: dark ? '#f87171' : '#dc2626' }}>{weakest ? Math.round(100 - weakest[1].score) : 0}%</div>
                   </div>
                 </div>
-              </div>
-
-              {/* vs Industry Benchmark */}
-              <div className="dcard fi" onClick={() => openModal('Industry Benchmark – All Domains', 'Your score vs. sector average across all 18 domains')} style={{ flex: 1, animationDelay: '.2s', minHeight: 0, display: 'flex', flexDirection: 'column', cursor: 'pointer', transition: 'box-shadow .2s' }}
-                onMouseEnter={e => e.currentTarget.style.boxShadow = '0 0 0 2px #f97316'}
-                onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 6px rgba(0,0,0,.04)'}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#111827' }}>📊 vs Industry Benchmark · <span style={{ fontSize: 8, color: '#6b7280', fontWeight: 500 }}>click for all domains</span></div>
-                <div style={{ fontSize: 8, color: '#9ca3af', marginBottom: 4 }}>Divergence from sector average</div>
-                <div style={{ flex: 1, minHeight: 0 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: T.title, margin: '8px 0 2px' }}>vs Industry Benchmark</div>
+                <div style={{ flex: 1, minHeight: 40 }}>
                   <svg viewBox="0 0 300 100" style={{ width: '100%', maxHeight: '100%' }}>
                     {(() => {
                       const barData = benchDomains.map(([, d]) => ({
@@ -2700,9 +2734,9 @@ function App() {
                             const hB = (b.bench / maxVal) * barH;
                             return (
                               <g key={i}>
-                                <rect x={x} y={barH - hY + 5} width={w} height={hY} rx={3} fill="#6366f1" />
-                                <rect x={x + w + 3} y={barH - hB + 5} width={w} height={hB} rx={3} fill="#e5e7eb" />
-                                <text x={x + w} y={barH + 15} textAnchor="middle" fontSize="7" fill="#9ca3af">{b.name}</text>
+                                <rect x={x} y={barH - hY + 5} width={w} height={hY} rx={3} fill={dark ? '#818cf8' : '#6366f1'} />
+                                <rect x={x + w + 3} y={barH - hB + 5} width={w} height={hB} rx={3} fill={T.grid} />
+                                <text x={x + w} y={barH + 15} textAnchor="middle" fontSize="7" fill={T.muted}>{b.name}</text>
                               </g>
                             );
                           })}
@@ -2711,25 +2745,17 @@ function App() {
                     })()}
                   </svg>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'center', gap: 12, flexShrink: 0, paddingTop: 2 }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 8, fontWeight: 600, color: '#6b7280' }}>
-                    <span style={{ width: 8, height: 2, background: '#6366f1', borderRadius: 2, display: 'inline-block' }} /> Above benchmark
-                  </span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 8, fontWeight: 600, color: '#6b7280' }}>
-                    <span style={{ width: 8, height: 2, background: '#ef4444', borderRadius: 2, display: 'inline-block' }} /> Below benchmark
-                  </span>
-                </div>
               </div>
             </div>
 
-            {/* ─── RIGHT COLUMN ─── */}
-            <div className="res-col" style={{ display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0 }}>
+            {/* ─── COLUMN 4: Heat Map + Priority + Validity ─── */}
+            <div className="res-col" style={{ display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 }}>
               {/* Risk Heat Map */}
               <div className="dcard fi" style={{ animationDelay: '.12s' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#111827' }}>🗺️ Risk Heat Map</div>
-                <div style={{ fontSize: 8, color: '#9ca3af', marginBottom: 4 }}>Click any cell for full 18-domain breakdown</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 3 }}>
-                  {heatMapDomains.map(([id, d], i) => {
+                <div style={{ fontSize: 12, fontWeight: 700, color: T.title }}>Risk Heat Map</div>
+                <div style={{ fontSize: 8, color: T.muted, marginBottom: 5 }}>Click any cell for full breakdown</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4 }}>
+                  {heatMapDomains.map(([id, d]) => {
                     const s = d.score;
                     const bg = s >= 70 ? 'linear-gradient(135deg,#dc2626,#b91c1c)' :
                       s >= 60 ? 'linear-gradient(135deg,#ef4444,#dc2626)' :
@@ -2741,7 +2767,7 @@ function App() {
                     return (
                       <div key={id}
                         onClick={() => openModal(`Risk Heat Map – ${d.name}`, `Domain score: ${Math.round(d.score)}% · All 18 domains shown`)}
-                        style={{ background: bg, borderRadius: 7, padding: '6px 4px', textAlign: 'center', cursor: 'pointer', transition: 'transform .15s, box-shadow .15s', color: 'white' }}
+                        style={{ background: bg, borderRadius: 8, padding: '7px 4px', textAlign: 'center', cursor: 'pointer', transition: 'transform .15s, box-shadow .15s', color: 'white' }}
                         onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.07)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(0,0,0,.3)'; }}
                         onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}>
                         <div style={{ fontSize: 7, fontWeight: 600, opacity: .9, marginBottom: 1, lineHeight: 1.1 }}>{d.name.replace(' Risk', '').substring(0, 9)}</div>
@@ -2752,20 +2778,18 @@ function App() {
                 </div>
               </div>
 
-              {/* Top Priority Risks - Line Graph */}
-              <div className="dcard fi" onClick={() => openModal('Top Priority Risks – All Domains', 'All domains sorted by risk level — critical first')} style={{ animationDelay: '.18s', background: '#ffffff', border: '1px solid #e5e7eb', cursor: 'pointer', transition: 'box-shadow .2s', display: 'flex', flexDirection: 'column', minHeight: 0 }}
-                onMouseEnter={e => e.currentTarget.style.boxShadow = '0 0 0 2px #6366f1'}
-                onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 6px rgba(0,0,0,.04)'}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#111827' }}>🔥 Top Priority Risks</div>
-                <div style={{ fontSize: 8, color: '#9ca3af', marginBottom: 4 }}>Wave pattern intensity</div>
+              {/* Top Priority Risks - Wave Graph */}
+              <div className="dcard fi" onClick={() => openModal('Top Priority Risks – All Domains', 'All domains sorted by risk level — critical first')} style={{ animationDelay: '.18s', cursor: 'pointer', transition: 'box-shadow .2s, background .3s', display: 'flex', flexDirection: 'column', minHeight: 0 }}
+                onMouseEnter={e => e.currentTarget.style.boxShadow = `0 0 0 2px ${dark ? '#818cf8' : '#6366f1'}`}
+                onMouseLeave={e => e.currentTarget.style.boxShadow = T.cardShadow}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: T.title }}>Top Priority Risks</div>
+                <div style={{ fontSize: 8, color: T.muted, marginBottom: 4 }}>Wave pattern intensity</div>
                 <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {priorityRisks.length > 0 ? (() => {
                     const w = 240, h = 100;
                     const margin = { left: 45, right: 20, top: 6, bottom: 16 };
                     const plotW = w - margin.left - margin.right;
                     const plotH = h - margin.top - margin.bottom;
-
-                    // Generate wave patterns
                     const data = priorityRisks.map((r, i) => ({
                       domain: r.domain,
                       type: r.type,
@@ -2774,11 +2798,8 @@ function App() {
                       phase: i * Math.PI / 3,
                       baseline: margin.top + (i + 0.5) * (plotH / priorityRisks.length)
                     }));
-
                     const xScale = (x: number) => margin.left + (x / 100) * plotW;
-                    const color = (type: string) => type === 'CRITICAL' ? '#dc2626' : '#ea580c';
-
-                    // Generate wavy path
+                    const color = (type: string) => type === 'CRITICAL' ? (dark ? '#f87171' : '#dc2626') : (dark ? '#fb923c' : '#ea580c');
                     const generateWave = (amplitude: number, frequency: number, phase: number, baseline: number) => {
                       let path = `M ${margin.left} ${baseline}`;
                       for (let x = 0; x <= 100; x += 2) {
@@ -2788,8 +2809,6 @@ function App() {
                       }
                       return path;
                     };
-
-                    // Generate filled wave areas
                     const generateWaveArea = (amplitude: number, frequency: number, phase: number, baseline: number) => {
                       let path = `M ${margin.left} ${baseline}`;
                       for (let x = 0; x <= 100; x += 2) {
@@ -2800,85 +2819,53 @@ function App() {
                       path += ` L ${w - margin.right} ${baseline} Z`;
                       return path;
                     };
-
                     return (
                       <svg width={w} height={h} style={{ maxWidth: '100%', height: 'auto' }} viewBox={`0 0 ${w} ${h}`}>
-                        {/* Wave areas with gradient */}
-                        {data.map((d, i) => {
-                          const col = color(d.type);
-                          const baseOpacity = 0.15;
-                          return (
-                            <g key={`area-${i}`}>
-                              {/* Filled wave area */}
-                              <path
-                                d={generateWaveArea(d.amplitude, d.frequency, d.phase, d.baseline)}
-                                fill={col}
-                                fillOpacity={baseOpacity}
-                                stroke="none"
-                              />
-                            </g>
-                          );
-                        })}
-
-                        {/* Wave lines */}
-                        {data.map((d, i) => {
-                          const col = color(d.type);
-                          return (
-                            <g key={`wave-${i}`}>
-                              {/* Main wave line */}
-                              <path
-                                d={generateWave(d.amplitude, d.frequency, d.phase, d.baseline)}
-                                fill="none"
-                                stroke={col}
-                                strokeWidth={2}
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </g>
-                          );
-                        })}
-
-                        {/* Baseline reference */}
                         {data.map((d, i) => (
-                          <line key={`baseline-${i}`} x1={margin.left} y1={d.baseline} x2={w - margin.right} y2={d.baseline} stroke="#f0f0f0" strokeWidth={0.8} opacity={0.5} />
+                          <g key={`area-${i}`}>
+                            <path d={generateWaveArea(d.amplitude, d.frequency, d.phase, d.baseline)} fill={color(d.type)} fillOpacity={0.15} stroke="none" />
+                          </g>
                         ))}
-
-                        {/* Domain labels */}
                         {data.map((d, i) => (
-                          <text key={`label-${i}`} x={margin.left - 4} y={d.baseline + 3} textAnchor="end" fontSize="7" fill="#6b7280" fontWeight="600">
+                          <g key={`wave-${i}`}>
+                            <path d={generateWave(d.amplitude, d.frequency, d.phase, d.baseline)} fill="none" stroke={color(d.type)} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                          </g>
+                        ))}
+                        {data.map((d, i) => (
+                          <line key={`baseline-${i}`} x1={margin.left} y1={d.baseline} x2={w - margin.right} y2={d.baseline} stroke={T.gridSoft} strokeWidth={0.8} opacity={0.6} />
+                        ))}
+                        {data.map((d, i) => (
+                          <text key={`label-${i}`} x={margin.left - 4} y={d.baseline + 3} textAnchor="end" fontSize="7" fill={T.sub} fontWeight="600">
                             {d.domain.replace(' Risk', '').substring(0, 15)}
                           </text>
                         ))}
                       </svg>
                     );
                   })() : (
-                    <div style={{ textAlign: 'center', fontSize: 9, color: '#16a34a', fontWeight: 600 }}>✅ No critical risks detected!</div>
+                    <div style={{ textAlign: 'center', fontSize: 9, color: dark ? '#4ade80' : '#16a34a', fontWeight: 600 }}>✅ No critical risks detected!</div>
                   )}
                 </div>
               </div>
 
-              {/* Validity & Benchmarks – Radial Bar Chart */}
-              <div className="dcard fi" onClick={() => openModal('Validity & Benchmarks – All Domains', `Validity: ${validityScore}% · ${confidenceLabel} · full domain breakdown`)} style={{ flex: 1, animationDelay: '.24s', minHeight: 0, display: 'flex', flexDirection: 'column', cursor: 'pointer', transition: 'box-shadow .2s' }}
-                onMouseEnter={e => e.currentTarget.style.boxShadow = '0 0 0 2px #10b981'}
-                onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 6px rgba(0,0,0,.04)'}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#111827' }}>✅ Validity & Benchmarks · <span style={{ fontSize: 8, color: '#6b7280', fontWeight: 500 }}>click for all domains</span></div>
+              {/* Validity & Benchmarks – Radial */}
+              <div className="dcard fi" onClick={() => openModal('Validity & Benchmarks – All Domains', `Validity: ${validityScore}% · ${confidenceLabel} · full domain breakdown`)} style={{ flex: 1, animationDelay: '.24s', minHeight: 0, display: 'flex', flexDirection: 'column', cursor: 'pointer', transition: 'box-shadow .2s, background .3s' }}
+                onMouseEnter={e => e.currentTarget.style.boxShadow = `0 0 0 2px ${dark ? '#34d399' : '#10b981'}`}
+                onMouseLeave={e => e.currentTarget.style.boxShadow = T.cardShadow}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: T.title }}>Validity &amp; Benchmarks</div>
                 <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {(() => {
                     const cx = 75, cy = 75, strokeW = 7, gap = 2;
                     const radialColors = ['#6366f1', '#f59e0b', '#ef4444', '#10b981'];
                     const radialData = benchDomains.slice(0, 4).map(([, d], i) => ({
-                      label: d.name.replace(' Risk', '').substring(0, 10),
                       value: Math.round(d.score),
                       color: radialColors[i],
                       r: 65 - i * (strokeW + gap),
                     }));
                     return (
                       <svg viewBox="0 0 150 150" style={{ width: '100%', maxHeight: '100%' }}>
-                        {/* Background circles */}
                         {radialData.map((d, i) => (
-                          <circle key={`bg-${i}`} cx={cx} cy={cy} r={d.r} fill="none" stroke="#f0f0f0" strokeWidth={strokeW} />
+                          <circle key={`bg-${i}`} cx={cx} cy={cy} r={d.r} fill="none" stroke={T.gridSoft} strokeWidth={strokeW} />
                         ))}
-                        {/* Value arcs */}
                         {radialData.map((d, i) => {
                           const circ = 2 * Math.PI * d.r;
                           const dash = (d.value / 100) * circ;
@@ -2890,27 +2877,48 @@ function App() {
                               style={{ transition: 'stroke-dasharray 1s ease' }} />
                           );
                         })}
-                        {/* Center validity score */}
-                        <text x={cx} y={cy - 4} textAnchor="middle" fontSize="18" fontWeight="800" fill="#111827">{validityScore}%</text>
-                        <text x={cx} y={cy + 8} textAnchor="middle" fontSize="6" fontWeight="600" fill="#16a34a">🟢 {confidenceLabel}</text>
+                        <text x={cx} y={cy - 2} textAnchor="middle" fontSize="18" fontWeight="800" fill={T.title}>{validityScore}%</text>
+                        <text x={cx} y={cy + 9} textAnchor="middle" fontSize="6" fontWeight="600" fill={dark ? '#4ade80' : '#16a34a'}>{confidenceLabel}</text>
                       </svg>
                     );
                   })()}
                 </div>
-                {/* Legend */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 8px', flexShrink: 0, paddingTop: 2 }}>
                   {benchDomains.slice(0, 4).map(([id, d], i) => {
                     const radialColors = ['#6366f1', '#f59e0b', '#ef4444', '#10b981'];
                     return (
                       <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                         <span style={{ width: 6, height: 6, borderRadius: '50%', background: radialColors[i], display: 'inline-block', flexShrink: 0 }} />
-                        <span style={{ fontSize: 7, color: '#374151', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.name.replace(' Risk', '').substring(0, 9)}</span>
+                        <span style={{ fontSize: 7, color: T.text, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.name.replace(' Risk', '').substring(0, 9)}</span>
                         <span style={{ fontSize: 7, fontWeight: 700, color: radialColors[i], marginLeft: 'auto' }}>{Math.round(d.score)}%</span>
                       </div>
                     );
                   })}
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* ═══ ROW 3: 90-Day Action Plan ═══ */}
+          <div className="dcard fi" style={{ animationDelay: '.26s', flexShrink: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.title }}>90-Day Action Plan</div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+              {[
+                { m: 'Month 1', c: dark ? '#818cf8' : '#6366f1', items: [{ dot: '#ef4444', t: `Fix ${criticalFlags + orangeFlags} critical risks` }, { dot: '#ef4444', t: 'External: urgent' }] },
+                { m: 'Month 2', c: dark ? '#818cf8' : '#6366f1', items: [{ dot: '#f59e0b', t: 'Improve average areas' }, { dot: '#8b5cf6', t: 'Strategic: train' }] },
+                { m: 'Month 3', c: dark ? '#818cf8' : '#6366f1', items: [{ dot: '#10b981', t: 'Embed practices' }, { dot: '#10b981', t: 'Reassessment' }] },
+              ].map((col, ci) => (
+                <div key={ci} style={{ borderLeft: ci > 0 ? `1px solid ${T.cardBorder}` : 'none', paddingLeft: ci > 0 ? 16 : 0 }}>
+                  <div style={{ fontSize: 8, fontWeight: 700, color: col.c, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>{col.m}</div>
+                  {col.items.map((it, ii) => (
+                    <div key={ii} style={{ fontSize: 9, color: T.text, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: it.dot, display: 'inline-block', flexShrink: 0 }} />{it.t}
+                    </div>
+                  ))}
+                </div>
+              ))}
             </div>
           </div>
 
